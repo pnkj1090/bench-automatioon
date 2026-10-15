@@ -19,3 +19,4 @@ node_modules/
 # Logs & Dumps
 *.log
 .pm2/
+auth-state.json

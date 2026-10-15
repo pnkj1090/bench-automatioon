@@ -1,0 +1,150 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
+import { chromium } from 'playwright';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const AUTH_STATE_FILE = path.join(__dirname, 'auth-state.json');
+const TOKEN_FILE = path.join(__dirname, 'token.txt');
+const REFRESH_TOKEN_FILE = path.join(__dirname, 'refresh-token.txt');
+const TARGET_URL = 'https://opportunistic-placement.azurewebsites.net/demands';
+
+export async function runHeadlessRenewal() {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🔄 [HEADLESS RENEWER] Starting autonomous session token renewal...`);
+
+  if (!fs.existsSync(AUTH_STATE_FILE)) {
+    console.error(`[${timestamp}] ❌ [HEADLESS RENEWER] auth-state.json not found at ${AUTH_STATE_FILE}`);
+    return { success: false, error: 'auth-state.json missing. Initial 1-time session capture required.' };
+  }
+
+  let browser;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process'
+      ]
+    });
+
+    const context = await browser.newContext({
+      storageState: AUTH_STATE_FILE,
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    });
+
+    const page = await context.newPage();
+    console.log(`[${timestamp}] 🌐 [HEADLESS RENEWER] Navigating to ${TARGET_URL}...`);
+
+    await page.goto(TARGET_URL, { waitUntil: 'networkidle', timeout: 45000 });
+
+    // Wait up to 15 seconds for MSAL to refresh and populate sessionStorage
+    console.log(`[${timestamp}] ⏳ [HEADLESS RENEWER] Waiting for MSAL sessionStorage tokens...`);
+    let extractedTokens = null;
+
+    for (let attempt = 0; attempt < 15; attempt++) {
+      extractedTokens = await page.evaluate(() => {
+        let refreshToken = null;
+        let accessToken = null;
+
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          const val = sessionStorage.getItem(key);
+          if (!val) continue;
+
+          try {
+            const parsed = JSON.parse(val);
+            if (parsed.credentialType === 'RefreshToken' && parsed.secret) {
+              refreshToken = parsed.secret;
+            } else if (parsed.credentialType === 'AccessToken' && parsed.secret) {
+              accessToken = parsed.secret;
+            }
+          } catch (e) {}
+        }
+
+        // Also check localStorage in case MSAL caching location differs
+        if (!refreshToken || !accessToken) {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const val = localStorage.getItem(key);
+            if (!val) continue;
+
+            try {
+              const parsed = JSON.parse(val);
+              if (parsed.credentialType === 'RefreshToken' && parsed.secret) {
+                refreshToken = parsed.secret;
+              } else if (parsed.credentialType === 'AccessToken' && parsed.secret) {
+                accessToken = parsed.secret;
+              }
+            } catch (e) {}
+          }
+        }
+
+        return { refreshToken, accessToken };
+      });
+
+      if (extractedTokens && extractedTokens.refreshToken && extractedTokens.accessToken) {
+        break;
+      }
+      await page.waitForTimeout(1000);
+    }
+
+    if (!extractedTokens || !extractedTokens.refreshToken || !extractedTokens.accessToken) {
+      const currentUrl = page.url();
+      console.error(`[${timestamp}] ❌ [HEADLESS RENEWER] Could not extract MSAL tokens. Current URL: ${currentUrl}`);
+      await browser.close();
+      return { 
+        success: false, 
+        error: `MSAL tokens not found in storage. Current URL: ${currentUrl}` 
+      };
+    }
+
+    console.log(`[${timestamp}] ✅ [HEADLESS RENEWER] Successfully extracted fresh MSAL tokens!`);
+
+    // Save tokens with secure file permissions
+    fs.writeFileSync(TOKEN_FILE, extractedTokens.accessToken, { encoding: 'utf8', mode: 0o600 });
+    fs.writeFileSync(REFRESH_TOKEN_FILE, extractedTokens.refreshToken, { encoding: 'utf8', mode: 0o600 });
+
+    // Update auth-state.json with renewed cookies
+    await context.storageState({ path: AUTH_STATE_FILE });
+    console.log(`[${timestamp}] 💾 [HEADLESS RENEWER] Updated ${AUTH_STATE_FILE} with latest session state.`);
+
+    await browser.close();
+
+    // Signal or restart prod-automator so it loads new token
+    exec('pm2 restart prod-automator', (err) => {
+      if (err) {
+        console.warn(`[${timestamp}] ⚠️ [HEADLESS RENEWER] PM2 restart warning: ${err.message}`);
+      } else {
+        console.log(`[${timestamp}] 🚀 [HEADLESS RENEWER] prod-automator restarted with fresh token.`);
+      }
+    });
+
+    return {
+      success: true,
+      timestamp: new Date().toISOString(),
+      refreshTokenPreview: extractedTokens.refreshToken.slice(0, 15) + '...',
+      accessTokenPreview: extractedTokens.accessToken.slice(0, 15) + '...'
+    };
+  } catch (err) {
+    if (browser) {
+      try { await browser.close(); } catch (e) {}
+    }
+    console.error(`[${timestamp}] ❌ [HEADLESS RENEWER] Exception: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
+// Allow direct CLI execution
+if (process.argv[1] && process.argv[1].endsWith('renew-session-headless.js')) {
+  runHeadlessRenewal().then(result => {
+    console.log('[HEADLESS RENEWER RESULT]', JSON.stringify(result, null, 2));
+    process.exit(result.success ? 0 : 1);
+  });
+}

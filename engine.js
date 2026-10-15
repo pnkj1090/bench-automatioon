@@ -7,6 +7,7 @@ import { CONFIG, getRuntimeConfig } from "./config.js";
 import { evaluateDemand } from "./classifier.js";
 import { generateCandidatePitch } from "./ai-pitch-generator.js";
 import { refreshAccessToken } from "./renew-token.js";
+import { runHeadlessRenewal } from "./renew-session-headless.js";
 import { sendWhatsAppNotification } from "./whatsapp.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -220,10 +221,35 @@ export class DemandAutomationEngine {
         if (res.success) {
           this.log("SUCCESS", `Token auto-renewed successfully! Valid for next ${Math.round(res.expiresIn / 60)} minutes.`);
         } else {
-          this.log("WARN", `Scheduled token renewal failed: ${res.error}`);
+          this.log("WARN", `Scheduled token renewal failed: ${res.error}. Attempting autonomous headless session renewal...`);
+          try {
+            const headlessRes = await runHeadlessRenewal();
+            if (headlessRes.success) {
+              this.log("SUCCESS", "Headless browser successfully renewed Azure AD session tokens!");
+            } else {
+              this.log("ERROR", `Headless browser renewal failed: ${headlessRes.error}`);
+            }
+          } catch (hErr) {
+            this.log("ERROR", `Error invoking headless session renewal: ${hErr.message}`);
+          }
         }
       }
     }, 45 * 60 * 1000);
+
+    // Proactive daily headless session renewal every 20 hours to prevent 24-hour token expiry
+    this.dailyHeadlessTimer = setInterval(async () => {
+      this.log("INFO", "Running scheduled 20-hour proactive headless session renewal...");
+      try {
+        const headlessRes = await runHeadlessRenewal();
+        if (headlessRes.success) {
+          this.log("SUCCESS", "Proactive headless session renewal succeeded! 24-hour window reset.");
+        } else {
+          this.log("WARN", `Proactive headless renewal notice: ${headlessRes.error}`);
+        }
+      } catch (hErr) {
+        this.log("ERROR", `Proactive headless renewal exception: ${hErr.message}`);
+      }
+    }, 20 * 60 * 60 * 1000);
   }
 
   stop() {
@@ -236,6 +262,10 @@ export class DemandAutomationEngine {
     if (this.renewTimer) {
       clearInterval(this.renewTimer);
       this.renewTimer = null;
+    }
+    if (this.dailyHeadlessTimer) {
+      clearInterval(this.dailyHeadlessTimer);
+      this.dailyHeadlessTimer = null;
     }
     this.log("WARN", "Demand Automation Engine has been paused.");
   }
@@ -262,6 +292,21 @@ export class DemandAutomationEngine {
         response = await fetch(url, { ...options, headers });
       } else {
         this.log("ERROR", `Autonomous token refresh failed: ${renew.error}`);
+        // Fallback: Autonomous Headless Browser Session Renewal
+        try {
+          this.log("INFO", "Triggering autonomous headless browser session renewal...");
+          const headlessRes = await runHeadlessRenewal();
+          if (headlessRes.success) {
+            this.log("SUCCESS", `Headless browser renewed session! Retrying request with fresh token...`);
+            token = this.getAuthToken();
+            headers["Authorization"] = `Bearer ${token}`;
+            response = await fetch(url, { ...options, headers });
+          } else {
+            this.log("ERROR", `Headless session renewal failed: ${headlessRes.error}`);
+          }
+        } catch (hErr) {
+          this.log("ERROR", `Error invoking headless session renewal: ${hErr.message}`);
+        }
       }
     }
 
