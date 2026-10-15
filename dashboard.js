@@ -138,445 +138,297 @@ const HTML_CONTENT = `<!DOCTYPE html>
   <title>Demand Automator • Mission Control</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090d16;
-      --card-bg: rgba(17, 24, 39, 0.7);
+      --bg: #07090e;
+      --card-bg: rgba(15, 23, 42, 0.7);
       --card-border: rgba(255, 255, 255, 0.08);
-      --card-hover: rgba(255, 255, 255, 0.12);
       --primary: #3b82f6;
-      --primary-hover: #2563eb;
       --success: #10b981;
       --warning: #f59e0b;
       --danger: #ef4444;
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-      --text-dim: #6b7280;
+      --purple: #8b5cf6;
+      --text-main: #f3f4f6;
+      --text-muted: #94a3b8;
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     html, body {
       height: 100vh;
       max-height: 100vh;
       overflow: hidden;
       background-color: var(--bg);
-      color: var(--text);
+      color: var(--text-main);
       font-family: var(--font-sans);
-      line-height: 1.4;
+      line-height: 1.35;
       font-size: 13px;
-      -webkit-font-smoothing: antialiased;
     }
 
-    /* Master Container: Fixed 100vh Single-Page Layout */
-    .app-layout {
+    /* Single Screen Viewport Container */
+    .app-viewport {
       height: 100vh;
       max-height: 100vh;
       display: flex;
       flex-direction: column;
       padding: 10px 14px;
-      gap: 10px;
+      gap: 8px;
       box-sizing: border-box;
     }
 
-    /* Top Navigation Header */
+    /* 1. Header Bar */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 16px;
-      background: var(--card-bg);
+      padding: 6px 12px;
+      background: rgba(15, 23, 42, 0.85);
       border: 1px solid var(--card-border);
-      border-radius: 12px;
-      backdrop-filter: blur(16px);
+      border-radius: 10px;
+      backdrop-filter: blur(12px);
       flex-shrink: 0;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
       gap: 12px;
     }
-    .brand-logo {
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
       width: 32px; height: 32px;
-      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 16px;
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
-    .brand-meta h1 {
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: -0.01em;
+    .brand-title h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+    .brand-title p { font-size: 11px; color: var(--text-muted); }
+
+    .header-center { display: flex; align-items: center; gap: 10px; }
+
+    /* Interval Input Form */
+    .interval-box {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 3px 8px;
+      font-size: 12px;
+    }
+    .interval-box label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; }
+    .interval-input {
+      width: 44px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
       color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      padding: 2px 4px;
     }
-    .brand-meta p {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* Status Pills */
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 9999px;
+    .interval-input:focus { outline: none; border-color: var(--primary); }
+    .btn-save-interval {
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #60a5fa;
+      border-radius: 5px;
+      padding: 2px 7px;
       font-size: 11px;
       font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
     }
-    .status-pill.online {
+    .btn-save-interval:hover { background: #2563eb; color: #fff; }
+
+    /* Standby Switch / Override */
+    .standby-widget {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 3px 8px;
+    }
+    .standby-badge {
+      font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+    }
+    .standby-badge.standby { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .standby-badge.override { background: rgba(139, 92, 246, 0.2); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.4); }
+    .standby-badge.active { background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+    .btn-override {
+      font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; transition: all 0.15s;
+    }
+    .btn-override.force-run {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(217, 119, 6, 0.4);
+    }
+    .btn-override.force-run:hover { background: #b45309; }
+    .btn-override.restore-standby {
+      background: rgba(139, 92, 246, 0.2);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: #c084fc;
+    }
+    .btn-override.restore-standby:hover { background: rgba(139, 92, 246, 0.35); color: #fff; }
+
+    /* Action buttons */
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 9999px;
+      font-size: 11px; font-weight: 700;
+    }
+    .status-badge.online {
       background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.25);
+      border: 1px solid rgba(16, 185, 129, 0.3);
       color: var(--success);
     }
-    .status-pill.stopped {
+    .status-badge.stopped {
       background: rgba(239, 68, 68, 0.12);
-      border: 1px solid rgba(239, 68, 68, 0.25);
+      border: 1px solid rgba(239, 68, 68, 0.3);
       color: var(--danger);
     }
-    .pulse-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-    }
-    .status-pill.online .pulse-dot {
+    .pulse-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .status-badge.online .pulse-dot {
       background: var(--success);
       box-shadow: 0 0 8px var(--success);
       animation: pulse 2s infinite;
     }
-    .status-pill.stopped .pulse-dot { background: var(--danger); }
+    .status-badge.stopped .pulse-dot { background: var(--danger); }
     @keyframes pulse {
       0% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.4; transform: scale(1.3); }
       100% { opacity: 1; transform: scale(1); }
     }
 
-    /* Modern Buttons */
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 11px; border-radius: 7px;
+      font-size: 11px; font-weight: 600; cursor: pointer;
       border: 1px solid transparent;
-      transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.15s ease;
     }
     .btn-pause {
-      background: rgba(245, 158, 11, 0.12);
-      border-color: rgba(245, 158, 11, 0.25);
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.3);
       color: #fbbf24;
     }
-    .btn-pause:hover { background: rgba(245, 158, 11, 0.22); }
+    .btn-pause:hover { background: rgba(245, 158, 11, 0.28); }
     .btn-resume {
-      background: rgba(16, 185, 129, 0.12);
-      border-color: rgba(16, 185, 129, 0.25);
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.3);
       color: #34d399;
     }
-    .btn-resume:hover { background: rgba(16, 185, 129, 0.22); }
+    .btn-resume:hover { background: rgba(16, 185, 129, 0.28); }
     .btn-outline {
-      background: rgba(255, 255, 255, 0.04);
+      background: rgba(255, 255, 255, 0.05);
       border-color: rgba(255, 255, 255, 0.12);
       color: #fff;
     }
-    .btn-outline:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
-    .btn-primary {
-      background: #2563eb;
+    .btn-outline:hover { background: rgba(255, 255, 255, 0.12); }
+    .btn-token {
+      background: linear-gradient(135deg, #1e40af, #2563eb);
       color: #fff;
     }
-    .btn-primary:hover { background: #1d4ed8; }
+    .btn-token:hover { background: #1d4ed8; }
 
-    /* Main Split Dashboard (Left: Controls & Metrics | Right: Live Terminal) */
-    .dashboard-body {
-      flex: 1;
-      min-height: 0; /* Crucial for zero-scroll flex child */
+    /* 2. Compact Status Strip */
+    .status-strip {
       display: grid;
-      grid-template-columns: 380px 1fr;
-      gap: 10px;
-    }
-
-    /* Left Control Column */
-    .control-column {
-      display: flex;
-      flex-direction: column;
+      grid-template-columns: 1.2fr 0.9fr 1.1fr 1fr;
       gap: 8px;
-      overflow-y: auto;
-      min-height: 0;
-    }
-    .control-column::-webkit-scrollbar { width: 4px; }
-    .control-column::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
-
-    /* Modern Glass Card */
-    .card {
-      background: var(--card-bg);
+      background: rgba(15, 23, 42, 0.75);
       border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 10px 14px;
-      backdrop-filter: blur(16px);
-      transition: border-color 0.2s;
-    }
-    .card:hover {
-      border-color: var(--card-hover);
-    }
-    .card-title {
-      font-size: 10.5px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    /* Standby Switch Card */
-    .standby-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-    }
-    .standby-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .standby-state {
-      font-size: 13px;
-      font-weight: 700;
-      color: #fff;
-    }
-    .standby-desc {
-      font-size: 11px;
-      color: var(--text-dim);
-    }
-    .btn-override {
-      font-size: 11.5px;
-      font-weight: 600;
+      border-radius: 9px;
       padding: 6px 12px;
-      border-radius: 7px;
-      cursor: pointer;
-      border: 1px solid transparent;
-      white-space: nowrap;
-      transition: all 0.2s;
-    }
-    .btn-override.force-run {
-      background: linear-gradient(135deg, #d97706, #b45309);
-      color: #fff;
-      box-shadow: 0 2px 8px rgba(217, 119, 6, 0.35);
-    }
-    .btn-override.force-run:hover { background: #b45309; }
-    .btn-override.restore-standby {
-      background: rgba(139, 92, 246, 0.15);
-      border-color: rgba(139, 92, 246, 0.3);
-      color: #c084fc;
-    }
-    .btn-override.restore-standby:hover { background: rgba(139, 92, 246, 0.25); }
-
-    /* Interval Form */
-    .interval-row {
-      display: flex;
-      justify-content: space-between;
+      flex-shrink: 0;
       align-items: center;
     }
-    .interval-inputs {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .interval-field {
-      width: 50px;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      color: #fff;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 700;
-      text-align: center;
-      padding: 4px 6px;
-    }
-    .interval-field:focus { outline: none; border-color: var(--primary); }
-    .btn-save-sm {
-      background: rgba(59, 130, 246, 0.15);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      color: #60a5fa;
-      border-radius: 6px;
-      padding: 4px 10px;
+    .strip-item {
+      display: flex; align-items: center; gap: 8px;
       font-size: 11.5px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .btn-save-sm:hover { background: #2563eb; color: #fff; }
-
-    /* Token & Profile Card */
-    .profile-line {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-    .profile-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: #fff;
-    }
-    .profile-email {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
+    .strip-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 600; }
+    .strip-val { font-weight: 600; color: #fff; }
     .token-pill {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      padding: 2px 7px;
-      border-radius: 5px;
+      font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px;
     }
-    .token-pill.valid { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-    .token-pill.warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-    .token-pill.expired { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .token-pill.valid { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .token-pill.warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .token-pill.expired { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
 
-    .meta-line {
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      color: var(--text-dim);
-      padding-top: 6px;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    /* Metrics 2x2 Grid */
-    .metrics-grid {
+    /* 3. Compact Metrics Row */
+    .metrics-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(4, 1fr);
       gap: 8px;
+      flex-shrink: 0;
     }
-    .metric-box {
+    .metric-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 9px;
-      padding: 9px 12px;
-      display: flex;
-      flex-direction: column;
-    }
-    .metric-box .label {
-      font-size: 10px;
-      text-transform: uppercase;
-      font-weight: 700;
-      color: var(--text-dim);
-      letter-spacing: 0.03em;
-    }
-    .metric-box .value {
-      font-family: var(--font-mono);
-      font-size: 20px;
-      font-weight: 700;
-      color: #fff;
-      margin: 2px 0;
-    }
-    .metric-box .sub {
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-
-    /* Right Column: Full-Height Live Terminal */
-    .terminal-column {
-      display: flex;
-      flex-direction: column;
-      background: #060911;
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      overflow: hidden;
-      min-height: 0;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    }
-    .terminal-header {
-      background: rgba(255, 255, 255, 0.02);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      padding: 8px 14px;
+      padding: 8px 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+    .metric-info { display: flex; flex-direction: column; }
+    .metric-label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; }
+    .metric-value { font-size: 22px; font-weight: 800; color: #fff; font-family: var(--font-mono); line-height: 1.1; margin: 2px 0; }
+    .metric-sub { font-size: 10px; color: var(--text-muted); }
+    .metric-icon { font-size: 22px; opacity: 0.8; }
+
+    /* 4. Terminal Section (Fills remaining screen space) */
+    .terminal-wrapper {
+      flex: 1;
+      min-height: 0; /* Critical for flex scroll */
+      display: flex;
+      flex-direction: column;
+      background: #03060d;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+    }
+    .terminal-header {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex; justify-content: space-between; align-items: center;
       flex-shrink: 0;
     }
-    .terminal-controls {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .mac-dot {
-      width: 9px; height: 9px;
-      border-radius: 50%;
-    }
-    .dot-close { background: #ef4444; }
-    .dot-min { background: #f59e0b; }
-    .dot-max { background: #10b981; }
-
+    .terminal-dots { display: flex; gap: 5px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot-red { background: #ff5f56; }
+    .dot-yellow { background: #ffbd2e; }
+    .dot-green { background: #27c93f; }
     .terminal-title {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-left: 6px;
+      font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); font-weight: 600;
     }
     .terminal-meta {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: #60a5fa;
+      font-size: 10px; font-family: var(--font-mono); color: #60a5fa;
     }
-
     .terminal-body {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
-      padding: 10px 14px;
       font-family: var(--font-mono);
       font-size: 11.5px;
-      line-height: 1.5;
-      background: #04070e;
+      line-height: 1.45;
+      padding: 8px 12px;
+      background: #020409;
     }
-    .terminal-body::-webkit-scrollbar { width: 5px; }
-    .terminal-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
-    .terminal-body::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
-
-    .log-line {
-      white-space: pre-wrap;
-      word-break: break-all;
-      margin-bottom: 3px;
-    }
+    .log-line { white-space: pre-wrap; word-break: break-all; margin-bottom: 3px; }
     .log-line.standby { color: #fde047; font-weight: 500; }
     .log-line.info { color: #93c5fd; }
-    .log-line.skip { color: #fbbf24; }
+    .log-line.skip { color: #fde047; }
     .log-line.success { color: #86efac; font-weight: 600; }
     .log-line.error { color: #fca5a5; font-weight: 600; }
-
-    .terminal-footer {
-      background: rgba(255, 255, 255, 0.02);
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-      padding: 4px 14px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      font-family: var(--font-mono);
-      color: var(--text-dim);
-      flex-shrink: 0;
-    }
 
     /* Modal Overlay */
     .modal-overlay {
@@ -588,19 +440,19 @@ const HTML_CONTENT = `<!DOCTYPE html>
     }
     .modal-overlay.open { opacity: 1; pointer-events: auto; }
     .modal-box {
-      background: #111827; border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 14px; width: 100%; max-width: 520px; padding: 20px;
+      background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px; width: 100%; max-width: 540px; padding: 20px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
       transform: scale(0.96); transition: transform 0.2s ease;
     }
     .modal-overlay.open .modal-box { transform: scale(1); }
     .modal-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px; }
-    .modal-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4; }
+    .modal-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
     .token-textarea {
       width: 100%; height: 90px;
-      background: #030712; border: 1px solid rgba(255, 255, 255, 0.15);
+      background: #060911; border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 8px; color: #fff; font-family: var(--font-mono);
-      font-size: 11px; padding: 10px; resize: none; margin-bottom: 14px;
+      font-size: 11px; padding: 10px; resize: none; margin-bottom: 12px;
     }
     .token-textarea:focus { outline: none; border-color: var(--primary); }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
@@ -621,18 +473,38 @@ const HTML_CONTENT = `<!DOCTYPE html>
 </head>
 <body>
 
-  <div class="app-layout">
+  <div class="app-viewport">
     
-    <!-- Top Navigation Header -->
+    <!-- 1. Header Bar -->
     <header>
       <div class="brand">
-        <div class="brand-logo">⚡</div>
-        <div class="brand-meta">
-          <h1>Demand Automator <span id="statusBadge" class="status-pill stopped"><span class="pulse-dot"></span><span id="statusText">CHECKING...</span></span></h1>
-          <p>Nagarro Opportunistic Placement • 24/7 Cloud Engine</p>
+        <div class="brand-icon">⚡</div>
+        <div class="brand-title">
+          <h1>Demand Automator <span id="statusBadge" class="status-badge stopped"><span class="pulse-dot"></span><span id="statusText">CHECKING...</span></span></h1>
+          <p>Nagarro Opportunistic Placement • Autonomous Cloud Runner</p>
         </div>
       </div>
 
+      <!-- Center Controls: Interval & Standby Override -->
+      <div class="header-center">
+        <!-- Standby Status & Override -->
+        <div class="standby-widget">
+          <span id="badgeStandby" class="standby-badge standby">🌙 Standby</span>
+          <button id="btnToggleStandby" class="btn-override force-run" onclick="toggleStandbyOverride()">
+            ⚡ Run Now (Override)
+          </button>
+        </div>
+
+        <!-- Editable Interval -->
+        <div class="interval-box">
+          <label>Poll:</label>
+          <input type="number" id="inputInterval" class="interval-input" min="5" max="3600" value="30" title="Cycle interval in seconds">
+          <span style="color: var(--text-muted); font-size: 11px;">sec</span>
+          <button class="btn-save-interval" onclick="saveInterval()" title="Save & apply new interval">Save</button>
+        </div>
+      </div>
+
+      <!-- Right Actions -->
       <div class="header-actions">
         <button id="btnPauseResume" class="btn btn-pause" onclick="togglePauseResume()">
           <span id="iconPR">⏸️</span> <span id="textPR">Pause</span>
@@ -640,130 +512,87 @@ const HTML_CONTENT = `<!DOCTYPE html>
         <button class="btn btn-outline" onclick="restartEngine()" title="Restart engine process">
           🔄 Restart
         </button>
-        <button class="btn btn-primary" onclick="openTokenModal()">
-          🔑 Token & Auto-Renew
+        <button class="btn btn-token" onclick="openTokenModal()">
+          🔑 Token
         </button>
       </div>
     </header>
 
-    <!-- Main Split Dashboard Layout -->
-    <div class="dashboard-body">
-      
-      <!-- Left Column: Controls & Metrics -->
-      <div class="control-column">
-        
-        <!-- Operating Schedule & Standby Override Card -->
-        <div class="card">
-          <div class="card-title">
-            <span>Operating Schedule & Standby</span>
-            <span id="badgeStandby" class="status-pill stopped" style="padding: 2px 6px; font-size: 10px;">Standby</span>
-          </div>
-          <div class="standby-row">
-            <div class="standby-info">
-              <span id="standbyHeading" class="standby-state">🌙 Standby Sleep Mode</span>
-              <span class="standby-desc">Standard: Mon–Fri, 8:00 AM – 8:00 PM IST</span>
-            </div>
-            <button id="btnToggleStandby" class="btn-override force-run" onclick="toggleStandbyOverride()">
-              ⚡ Run Now
-            </button>
-          </div>
-        </div>
-
-        <!-- Scan Frequency Card -->
-        <div class="card">
-          <div class="card-title">
-            <span>Cycle Polling Frequency</span>
-            <span style="font-size: 10px; color: var(--text-dim);">AWS Background Runner</span>
-          </div>
-          <div class="interval-row">
-            <span style="color: var(--text-muted); font-size: 12px;">Query portal every:</span>
-            <div class="interval-inputs">
-              <input type="number" id="inputInterval" class="interval-field" min="5" max="3600" value="30">
-              <span style="color: var(--text-muted); font-size: 11px;">seconds</span>
-              <button class="btn-save-sm" onclick="saveInterval()">Save</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Candidate Profile & Authentication Health -->
-        <div class="card">
-          <div class="card-title">
-            <span>Candidate & Authentication</span>
-            <span id="stripTokenPill" class="token-pill valid">Valid: --:--</span>
-          </div>
-          <div class="profile-line">
-            <div>
-              <div id="stripCandidate" class="profile-name">Pankaj Kumar</div>
-              <div class="profile-email">pankaj.kumar07@nagarro.com</div>
-            </div>
-            <div id="stripAutoRenew" style="font-size: 11px; font-weight: 600; color: #34d399;">
-              ✅ 45m Auto-Renew Active
-            </div>
-          </div>
-          <div class="meta-line">
-            <span>Server Resources:</span>
-            <span id="stripServer" style="font-family: var(--font-mono); color: #fff;">RAM: -- MB | CPU: --% | Up: --</span>
-          </div>
-        </div>
-
-        <!-- Real-Time Metrics Deck (2x2 Grid) -->
-        <div class="metrics-grid">
-          <div class="metric-box">
-            <span class="label">Scan Cycles</span>
-            <span id="valCycles" class="value">#0</span>
-            <span id="valLastScan" class="sub">Last: Never</span>
-          </div>
-
-          <div class="metric-box">
-            <span class="label">Demands Evaluated</span>
-            <span id="valEvaluated" class="value">0</span>
-            <span class="sub">Gurugram & WFA</span>
-          </div>
-
-          <div class="metric-box">
-            <span class="label">Disqualified / Skipped</span>
-            <span id="valSkipped" class="value">0</span>
-            <span class="sub">Python-only or Applied</span>
-          </div>
-
-          <div class="metric-box">
-            <span class="label">Auto-Applied</span>
-            <span id="valApplied" class="value" style="color: #34d399;">0</span>
-            <span class="sub">Frontend & Full-stack</span>
-          </div>
-        </div>
-
+    <!-- 2. Compact Status Strip -->
+    <div class="status-strip">
+      <div class="strip-item">
+        <span class="strip-label">Candidate:</span>
+        <span id="stripCandidate" class="strip-val">Pankaj Kumar (pankaj.kumar07@nagarro.com)</span>
       </div>
-
-      <!-- Right Column: Full-Height Live Telemetry Terminal -->
-      <div class="terminal-column">
-        <div class="terminal-header">
-          <div class="terminal-controls">
-            <div class="mac-dot dot-close"></div>
-            <div class="mac-dot dot-min"></div>
-            <div class="mac-dot dot-max"></div>
-            <span class="terminal-title">LIVE TELEMETRY STREAM</span>
-          </div>
-          <div id="terminalMeta" class="terminal-meta">
-            EC2 ap-south-1 • PM2 PID: --
-          </div>
-        </div>
-
-        <div id="terminalLogs" class="terminal-body">
-          <div class="log-line info">Connecting to AWS cloud logs...</div>
-        </div>
-
-        <div class="terminal-footer">
-          <span>Target: https://opportunistic-placement.azurewebsites.net</span>
-          <span>Security: Loopback 127.0.0.1:3000 • Encrypted SSH Tunnel</span>
-        </div>
+      <div class="strip-item">
+        <span class="strip-label">Token:</span>
+        <span id="stripTokenPill" class="token-pill valid">Valid: --:--</span>
       </div>
+      <div class="strip-item">
+        <span class="strip-label">Entra ID:</span>
+        <span id="stripAutoRenew" class="strip-val" style="color: #34d399;">✅ 45m Auto-Renew Active</span>
+      </div>
+      <div class="strip-item" style="justify-content: flex-end;">
+        <span class="strip-label">Server:</span>
+        <span id="stripServer" class="strip-val" style="font-family: var(--font-mono); font-size: 11px;">RAM: -- MB | CPU: --% | Up: --</span>
+      </div>
+    </div>
 
+    <!-- 3. Compact Metrics Row -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-info">
+          <span class="metric-label">Scan Cycles</span>
+          <span id="valCycles" class="metric-value">#0</span>
+          <span id="valLastScan" class="metric-sub">Last: Never</span>
+        </div>
+        <div class="metric-icon">🔄</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-info">
+          <span class="metric-label">Demands Evaluated</span>
+          <span id="valEvaluated" class="metric-value">0</span>
+          <span class="metric-sub">Gurugram & WFA</span>
+        </div>
+        <div class="metric-icon">🔍</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-info">
+          <span class="metric-label">Skipped Demands</span>
+          <span id="valSkipped" class="metric-value">0</span>
+          <span class="metric-sub">Python-Only / Applied</span>
+        </div>
+        <div class="metric-icon">⏭️</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-info">
+          <span class="metric-label">Auto-Applied</span>
+          <span id="valApplied" class="metric-value" style="color: #34d399;">0</span>
+          <span class="metric-sub">Frontend / Full-stack</span>
+        </div>
+        <div class="metric-icon">🎯</div>
+      </div>
+    </div>
+
+    <!-- 4. Live Terminal Viewport (Fills remaining space) -->
+    <div class="terminal-wrapper">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+        </div>
+        <div class="terminal-title">LIVE CLOUD TELEMETRY • AWS EC2 (Mumbai ap-south-1)</div>
+        <div id="terminalMeta" class="terminal-meta">PM2 PID: -- • Mon-Fri (8AM-8PM IST)</div>
+      </div>
+      <div id="terminalLogs" class="terminal-body">
+        <div class="log-line info">Connecting to AWS cloud logs...</div>
+      </div>
     </div>
 
   </div>
 
-  <!-- Token Modal Dialog -->
+  <!-- Token Modal -->
   <div id="tokenModal" class="modal-overlay" onclick="if(event.target===this) closeTokenModal()">
     <div class="modal-box">
       <h2 class="modal-title">🔑 Update Azure AD / Refresh Token</h2>
@@ -771,7 +600,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
       <textarea id="tokenInput" class="token-textarea" placeholder="Paste token here (starts with '0.A...' or 'eyJ...')..."></textarea>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeTokenModal()">Cancel</button>
-        <button id="btnSaveToken" class="btn btn-primary" onclick="submitToken()">Save & Enable Auto-Renew</button>
+        <button id="btnSaveToken" class="btn btn-token" onclick="submitToken()">Save & Enable Auto-Renew</button>
       </div>
     </div>
   </div>
@@ -843,13 +672,13 @@ const HTML_CONTENT = `<!DOCTYPE html>
           const textPR = document.getElementById('textPR');
 
           if (currentStatus === 'online') {
-            badge.className = 'status-pill online';
+            badge.className = 'status-badge online';
             text.innerText = 'ONLINE';
             btnPR.className = 'btn btn-pause';
             iconPR.innerText = '⏸️';
             textPR.innerText = 'Pause';
           } else {
-            badge.className = 'status-pill stopped';
+            badge.className = 'status-badge stopped';
             text.innerText = 'PAUSED';
             btnPR.className = 'btn btn-resume';
             iconPR.innerText = '▶️';
@@ -876,7 +705,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         // Token Info
         if (data.token) {
           tokenExpTimestamp = data.token.exp;
-          document.getElementById('stripCandidate').innerText = data.token.name;
+          document.getElementById('stripCandidate').innerText = data.token.name + ' (' + data.token.email + ')';
           updateCountdown();
         }
 
@@ -919,7 +748,6 @@ const HTML_CONTENT = `<!DOCTYPE html>
     function updateStandbyUI() {
       const badge = document.getElementById('badgeStandby');
       const btn = document.getElementById('btnToggleStandby');
-      const heading = document.getElementById('standbyHeading');
 
       const istStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
       const istDate = new Date(istStr);
@@ -928,34 +756,22 @@ const HTML_CONTENT = `<!DOCTYPE html>
       const isNormalWorkingHours = (day >= 1 && day <= 5 && hour >= 8 && hour < 20);
 
       if (isOverrideActive) {
-        badge.className = 'status-pill stopped';
-        badge.style.background = 'rgba(139, 92, 246, 0.15)';
-        badge.style.borderColor = 'rgba(139, 92, 246, 0.3)';
-        badge.style.color = '#c084fc';
+        badge.className = 'standby-badge override';
         badge.innerText = '⚡ Override Active';
-        heading.innerText = '⚡ Manual Override Active';
         btn.className = 'btn-override restore-standby';
-        btn.innerText = '🌙 Re-enable Standby';
+        btn.innerText = '🌙 Re-enable Auto Standby';
         btn.title = 'Return to scheduled standby (Mon-Fri 8AM-8PM IST)';
       } else if (!isNormalWorkingHours) {
-        badge.className = 'status-pill stopped';
-        badge.style.background = 'rgba(245, 158, 11, 0.15)';
-        badge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
-        badge.style.color = '#fbbf24';
-        badge.innerText = (day === 0 || day === 6) ? '🏖️ Weekend Standby' : '🌙 Night Standby';
-        heading.innerText = (day === 0 || day === 6) ? '🏖️ Weekend Standby' : '🌙 Night Standby Mode';
+        badge.className = 'standby-badge standby';
+        badge.innerText = (day === 0 || day === 6) ? '🏖️ Weekend Standby' : '🌙 Night Standby (8AM-8PM)';
         btn.className = 'btn-override force-run';
-        btn.innerText = '⚡ Run Now';
+        btn.innerText = '⚡ Run Now (Override)';
         btn.title = 'Bypass schedule and run automation immediately right now';
       } else {
-        badge.className = 'status-pill online';
-        badge.style.background = 'rgba(16, 185, 129, 0.15)';
-        badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-        badge.style.color = '#34d399';
-        badge.innerText = '🟢 Active Window';
-        heading.innerText = '🟢 Active Operating Hours';
+        badge.className = 'standby-badge active';
+        badge.innerText = '🟢 Active Window (8AM-8PM)';
         btn.className = 'btn-override restore-standby';
-        btn.innerText = '🌙 Force Sleep';
+        btn.innerText = '🌙 Force Standby Sleep';
         btn.title = 'Put engine into standby sleep mode';
       }
     }
@@ -997,7 +813,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         });
         const data = await res.json();
         if (data.success) {
-          showToast('⏱️ Poll interval set to ' + sec + 's! Engine restarted.');
+          showToast('⏱️ Poll interval updated to ' + sec + 's! Engine restarted.');
           fetchData();
         } else {
           showToast('Failed: ' + (data.error || 'Could not update interval'), true);
