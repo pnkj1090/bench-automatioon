@@ -108,7 +108,7 @@ function parseStatsFromLogs(lines) {
     }
     if (line.includes('Already applied')) skippedAlreadyApplied++;
     if (line.includes('Only Python required')) skippedPythonOnly++;
-    if (line.includes('[SUCCESS]') || line.includes('APPLIED to')) applied++;
+    if (line.includes('APPLIED to')) applied++;
   }
 
   return { cycles, skippedAlreadyApplied, skippedPythonOnly, applied, lastScan };
