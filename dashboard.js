@@ -1444,14 +1444,36 @@ const server = http.createServer(async (req, res) => {
   // POST /api/token/update
   if (pathname === '/api/token/update' && method === 'POST') {
     const body = await parseJsonBody(req);
-    const rawToken = (body.token || '').trim();
+    let rawToken = (body.token || '').trim();
+    if (rawToken.startsWith('Bearer ')) {
+      rawToken = rawToken.replace(/^Bearer\s+/i, '').trim();
+    }
     if (!rawToken) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'Token is required' }));
     }
 
-    if (rawToken.startsWith('0.A') || (rawToken.length > 500 && !rawToken.includes('.'))) {
+    const isRefreshToken = rawToken.startsWith('0.A') || rawToken.startsWith('1.A') || !rawToken.startsWith('eyJ');
+
+    if (isRefreshToken) {
       fs.writeFileSync(REFRESH_TOKEN_FILE, rawToken, { mode: 0o600 });
+      try {
+        const exchange = await refreshAccessToken(rawToken);
+        if (exchange && exchange.success) {
+          exec('pm2 restart prod-automator', (err) => {
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            return res.end(JSON.stringify({
+              success: !err,
+              isRefreshToken: true,
+              message: `Refresh token activated! Acquired fresh access token (valid ~${Math.round(exchange.expiresIn / 60)}m). 24/7 autonomous auto-renew is ACTIVE!`,
+              token: parseJwt(exchange.accessToken)
+            }));
+          });
+          return;
+        }
+      } catch (err) {}
+
+      // Fallback if exchange threw
       exec('pm2 restart prod-automator', (err) => {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         return res.end(JSON.stringify({
