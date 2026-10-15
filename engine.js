@@ -23,7 +23,8 @@ export class DemandAutomationEngine {
     this.isRunning = false;
     this.timer = null;
     this.renewTimer = null;
-    this.appliedDemands = new Set();
+    const existingApplied = getAppliedHistory();
+    this.appliedDemands = new Set(existingApplied.map(item => item.demandId));
     this.logs = [];
     this.maxLogs = 200;
     this.onLogCallback = options.onLog || null;
@@ -32,7 +33,8 @@ export class DemandAutomationEngine {
     this.stats = {
       cyclesCount: 0,
       totalEvaluated: 0,
-      totalApplied: 0,
+      totalApplied: existingApplied.length,
+      lastLatencyMs: 0,
       totalSkippedAlreadyApplied: 0,
       totalSkippedPythonOnly: 0,
       lastCycleTime: null
@@ -172,7 +174,9 @@ export class DemandAutomationEngine {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
+    const startFetch = Date.now();
     let response = await fetch(url, { ...options, headers });
+    this.stats.lastLatencyMs = Date.now() - startFetch;
 
     // Handle 401 Unauthorized via autonomous refresh token exchange
     if (response.status === 401 && this.hasRefreshToken()) {
@@ -365,6 +369,14 @@ export class DemandAutomationEngine {
         }
       }
 
+      saveAppliedRecord({
+        demandId,
+        genus: demand.genus,
+        location: Array.isArray(demand.location) ? demand.location.join(", ") : (demand.location || "India - Gurugram / WFA"),
+        skills: checkedSkills,
+        pitch: aiPitch,
+        appliedAt: new Date().toISOString()
+      });
       this.appliedDemands.add(demandId);
       this.stats.totalApplied++;
       this.log("SUCCESS", `🎉 APPLIED to ${demandId} (${demand.genus})! Skills checked: ${checkedSkills.length}. AI pitch submitted.`);

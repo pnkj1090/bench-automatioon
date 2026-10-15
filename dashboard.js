@@ -12,7 +12,30 @@ const PORT = process.env.PORT || 3000;
 const HOST = '127.0.0.1'; // Strictly loopback only for zero-exposure security
 const TOKEN_FILE = path.join(__dirname, 'token.txt');
 const REFRESH_TOKEN_FILE = path.join(__dirname, 'refresh-token.txt');
+const APPLIED_FILE = path.join(__dirname, 'applied-demands.json');
 const LOG_FILE = path.join(process.env.HOME || '/home/ec2-user', '.pm2', 'logs', 'prod-automator-out.log');
+
+let cachedLatency = 42;
+let lastLatencyTime = 0;
+
+async function checkPortalLatency() {
+  if (Date.now() - lastLatencyTime < 15000) return cachedLatency;
+  lastLatencyTime = Date.now();
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    await fetch('https://opportunistic-placement.azurewebsites.net', {
+      method: 'HEAD',
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    cachedLatency = Date.now() - start;
+  } catch (e) {
+    cachedLatency = Math.min(Date.now() - start, 999);
+  }
+  return cachedLatency;
+}
 
 function parseJwt(token) {
   try {
@@ -53,6 +76,15 @@ function hasRefreshToken() {
   } catch (e) {
     return false;
   }
+}
+
+function getAppliedDemandsList() {
+  try {
+    if (fs.existsSync(APPLIED_FILE)) {
+      return JSON.parse(fs.readFileSync(APPLIED_FILE, 'utf8'));
+    }
+  } catch (e) {}
+  return [];
 }
 
 function getLogLines(filePath, maxLines = 80) {
@@ -113,6 +145,12 @@ function parseStatsFromLogs(lines) {
     if (line.includes('APPLIED to')) applied++;
   }
 
+  // Also include count from persistent applied file if available
+  const saved = getAppliedDemandsList();
+  if (saved.length > applied) {
+    applied = saved.length;
+  }
+
   return { cycles, skippedAlreadyApplied, skippedPythonOnly, applied, lastScan };
 }
 
@@ -138,7 +176,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
   <title>Demand Automator • Mission Control</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #07090e;
@@ -331,11 +369,27 @@ const HTML_CONTENT = `<!DOCTYPE html>
       color: #fff;
     }
     .btn-token:hover { background: #1d4ed8; }
+    .btn-history {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #34d399;
+    }
+    .btn-history:hover { background: rgba(16, 185, 129, 0.22); }
+    .btn-sound {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: var(--text-muted);
+    }
+    .btn-sound.on {
+      color: #60a5fa;
+      border-color: rgba(96, 165, 250, 0.4);
+      background: rgba(96, 165, 250, 0.1);
+    }
 
     /* 2. Compact Status Strip */
     .status-strip {
       display: grid;
-      grid-template-columns: 1.2fr 0.9fr 1.1fr 1fr;
+      grid-template-columns: 1.2fr 0.8fr 1fr 0.6fr 1fr;
       gap: 8px;
       background: rgba(15, 23, 42, 0.75);
       border: 1px solid var(--card-border);
@@ -361,6 +415,15 @@ const HTML_CONTENT = `<!DOCTYPE html>
     .token-pill.warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
     .token-pill.expired { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
 
+    .latency-pill {
+      font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px;
+      background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .latency-pill.fast { color: #34d399; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.15); }
+    .latency-pill.medium { color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.15); }
+    .latency-pill.slow { color: #f87171; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.15); }
+
     /* 3. Compact Metrics Row */
     .metrics-row {
       display: grid;
@@ -376,7 +439,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
       display: flex;
       justify-content: space-between;
       align-items: center;
+      transition: all 0.2s;
     }
+    .metric-card.interactive { cursor: pointer; }
+    .metric-card.interactive:hover { border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.05); }
     .metric-info { display: flex; flex-direction: column; }
     .metric-label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; }
     .metric-value { font-size: 22px; font-weight: 800; color: #fff; font-family: var(--font-mono); line-height: 1.1; margin: 2px 0; }
@@ -429,6 +495,68 @@ const HTML_CONTENT = `<!DOCTYPE html>
     .log-line.skip { color: #fde047; }
     .log-line.success { color: #86efac; font-weight: 600; }
     .log-line.error { color: #fca5a5; font-weight: 600; }
+
+    /* Slide-Over Drawer for Applied Demands */
+    .drawer-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(6px); z-index: 1500;
+      opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+    }
+    .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+    .drawer-panel {
+      position: fixed; top: 0; right: 0; bottom: 0; width: 480px; max-width: 90vw;
+      background: #0d1424; border-left: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: -10px 0 40px rgba(0, 0, 0, 0.7);
+      display: flex; flex-direction: column; z-index: 1501;
+      transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .drawer-backdrop.open .drawer-panel { transform: translateX(0); }
+
+    .drawer-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(255, 255, 255, 0.02);
+      flex-shrink: 0;
+    }
+    .drawer-title { font-size: 15px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .drawer-close {
+      background: rgba(255, 255, 255, 0.06); border: none; color: var(--text-muted);
+      width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 14px;
+    }
+    .drawer-close:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+
+    .drawer-body {
+      flex: 1; overflow-y: auto; padding: 14px 18px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .drawer-body::-webkit-scrollbar { width: 5px; }
+    .drawer-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+
+    .applied-item-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      transition: all 0.2s;
+    }
+    .applied-item-card:hover { border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.03); }
+    .applied-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .applied-id { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: #34d399; }
+    .applied-time { font-size: 11px; color: var(--text-muted); }
+    .applied-role { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .applied-skills-box { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+    .applied-skill-tag {
+      font-size: 10px; padding: 2px 6px; border-radius: 4px;
+      background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .applied-pitch-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px; padding: 8px 10px; font-size: 11px;
+      color: var(--text-muted); line-height: 1.45; max-height: 120px; overflow-y: auto;
+    }
 
     /* Modal Overlay */
     .modal-overlay {
@@ -506,6 +634,16 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
       <!-- Right Actions -->
       <div class="header-actions">
+        <!-- Applied History Drawer Button -->
+        <button class="btn btn-history" onclick="toggleAppliedDrawer()" title="View history of all auto-applied demands">
+          📋 History (<span id="appliedBadgeCount">0</span>)
+        </button>
+
+        <!-- Sound Toggle -->
+        <button id="btnSound" class="btn btn-sound on" onclick="toggleSound()" title="Toggle audible chime when a demand is auto-applied">
+          🔔 Sound: ON
+        </button>
+
         <button id="btnPauseResume" class="btn btn-pause" onclick="togglePauseResume()">
           <span id="iconPR">⏸️</span> <span id="textPR">Pause</span>
         </button>
@@ -531,6 +669,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
       <div class="strip-item">
         <span class="strip-label">Entra ID:</span>
         <span id="stripAutoRenew" class="strip-val" style="color: #34d399;">✅ 45m Auto-Renew Active</span>
+      </div>
+      <div class="strip-item">
+        <span class="strip-label">Portal:</span>
+        <span id="stripLatencyPill" class="latency-pill fast">⚡ -- ms</span>
       </div>
       <div class="strip-item" style="justify-content: flex-end;">
         <span class="strip-label">Server:</span>
@@ -564,9 +706,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
         </div>
         <div class="metric-icon">⏭️</div>
       </div>
-      <div class="metric-card">
+      <div class="metric-card interactive" onclick="toggleAppliedDrawer()" title="Click to view history of auto-applied demands">
         <div class="metric-info">
-          <span class="metric-label">Auto-Applied</span>
+          <span class="metric-label">Auto-Applied (View 📋)</span>
           <span id="valApplied" class="metric-value" style="color: #34d399;">0</span>
           <span class="metric-sub">Frontend / Full-stack</span>
         </div>
@@ -592,6 +734,26 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
   </div>
 
+  <!-- Slide-Over Drawer for Applied Demands History -->
+  <div id="appliedDrawerBackdrop" class="drawer-backdrop" onclick="if(event.target===this) toggleAppliedDrawer(false)">
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <div class="drawer-title">
+          <span>📋 Auto-Applied Demands</span>
+          <span id="drawerBadgeCount" style="font-size: 11px; background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 9999px;">0 Total</span>
+        </div>
+        <button class="drawer-close" onclick="toggleAppliedDrawer(false)">✕</button>
+      </div>
+      <div id="drawerBody" class="drawer-body">
+        <div style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
+          <div style="font-size: 32px; margin-bottom: 10px;">📭</div>
+          <div style="font-weight: 600; color: #fff; margin-bottom: 4px;">No Demands Auto-Applied Yet</div>
+          <div style="font-size: 12px; line-height: 1.5;">When qualified Frontend or Full-stack demands match your active filters, they will be automatically submitted and recorded here with their full AI pitch.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Token Modal -->
   <div id="tokenModal" class="modal-overlay" onclick="if(event.target===this) closeTokenModal()">
     <div class="modal-box">
@@ -614,6 +776,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
     let countdownInterval = null;
     let isOverrideActive = false;
     let currentInterval = 30;
+    let previousAppliedCount = 0;
+    let soundEnabled = localStorage.getItem('soundAlerts') !== 'false';
+    let appliedHistoryData = [];
 
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
@@ -633,6 +798,121 @@ const HTML_CONTENT = `<!DOCTYPE html>
       if (h > 0) return h + 'h ' + m + 'm';
       if (m > 0) return m + 'm ' + s + 's';
       return s + 's';
+    }
+
+    // Pleasant Web Audio synthesizer chime for auto-apply notification
+    function playChime() {
+      if (!soundEnabled) return;
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(440, ctx.currentTime);
+        osc2.frequency.exponentialRampToValueAtTime(1174.66, ctx.currentTime + 0.18); // D6
+
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start();
+        osc2.start();
+        osc1.stop(ctx.currentTime + 0.55);
+        osc2.stop(ctx.currentTime + 0.55);
+      } catch (e) {}
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      localStorage.setItem('soundAlerts', soundEnabled ? 'true' : 'false');
+      updateSoundUI();
+      if (soundEnabled) {
+        playChime();
+        showToast('🔔 Sound alerts enabled!');
+      } else {
+        showToast('🔕 Sound alerts muted.');
+      }
+    }
+
+    function updateSoundUI() {
+      const btn = document.getElementById('btnSound');
+      if (soundEnabled) {
+        btn.className = 'btn btn-sound on';
+        btn.innerText = '🔔 Sound: ON';
+      } else {
+        btn.className = 'btn btn-sound';
+        btn.innerText = '🔕 Sound: OFF';
+      }
+    }
+
+    function toggleAppliedDrawer(forceOpen) {
+      const drawer = document.getElementById('appliedDrawerBackdrop');
+      if (forceOpen === true) {
+        drawer.classList.add('open');
+      } else if (forceOpen === false) {
+        drawer.classList.remove('open');
+      } else {
+        drawer.classList.toggle('open');
+      }
+      if (drawer.classList.contains('open')) {
+        renderDrawerItems();
+      }
+    }
+
+    function renderDrawerItems() {
+      const container = document.getElementById('drawerBody');
+      const badge = document.getElementById('drawerBadgeCount');
+      const headerCount = document.getElementById('appliedBadgeCount');
+      
+      const count = appliedHistoryData.length;
+      badge.innerText = count + ' Total';
+      headerCount.innerText = count;
+
+      if (!count) {
+        container.innerHTML = \`
+          <div style="text-align: center; color: var(--text-muted); padding: 50px 20px;">
+            <div style="font-size: 34px; margin-bottom: 10px;">📭</div>
+            <div style="font-weight: 600; color: #fff; margin-bottom: 4px;">No Demands Auto-Applied Yet</div>
+            <div style="font-size: 12px; line-height: 1.5;">When qualified Frontend or Full-stack demands match your active filters, they will be automatically submitted and recorded here with their full AI pitch.</div>
+          </div>
+        \`;
+        return;
+      }
+
+      container.innerHTML = appliedHistoryData.map(item => {
+        const timeStr = item.appliedAt ? new Date(item.appliedAt).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }) + ' IST' : 'Recently';
+        const skillsList = Array.isArray(item.skills) ? item.skills : [];
+        return \`
+          <div class="applied-item-card">
+            <div class="applied-top">
+              <span class="applied-id">Demand #\${escapeHtml(String(item.demandId))}</span>
+              <span class="applied-time">\${timeStr}</span>
+            </div>
+            <div class="applied-role">\${escapeHtml(item.genus || 'Role')} • <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">\${escapeHtml(item.location || 'India')}</span></div>
+            \${skillsList.length ? \`
+              <div class="applied-skills-box">
+                \${skillsList.map(s => \`<span class="applied-skill-tag">\${escapeHtml(String(s))}</span>\`).join('')}
+              </div>
+            \` : ''}
+            <div class="applied-pitch-box">
+              <strong style="color: #60a5fa; display: block; margin-bottom: 3px;">Submitted Pitch:</strong>
+              \${escapeHtml(item.pitch || 'Authentic resume and pitch submitted.')}
+            </div>
+          </div>
+        \`;
+      }).join('');
     }
 
     function updateCountdown() {
@@ -689,6 +969,15 @@ const HTML_CONTENT = `<!DOCTYPE html>
           document.getElementById('terminalMeta').innerText = 'PM2: ' + currentStatus.toUpperCase() + ' (RAM: ' + data.pm2.memoryMb + 'MB) • Interval: ' + (data.runtimeConfig?.pollIntervalSeconds || 30) + 's';
         }
 
+        // Latency
+        if (typeof data.latency === 'number') {
+          const latEl = document.getElementById('stripLatencyPill');
+          latEl.innerText = '⚡ ' + data.latency + ' ms';
+          if (data.latency < 150) latEl.className = 'latency-pill fast';
+          else if (data.latency < 450) latEl.className = 'latency-pill medium';
+          else latEl.className = 'latency-pill slow';
+        }
+
         // Runtime Config: Interval & Standby Override
         if (data.runtimeConfig) {
           isOverrideActive = Boolean(data.runtimeConfig.standbyOverride);
@@ -714,6 +1003,20 @@ const HTML_CONTENT = `<!DOCTYPE html>
           document.getElementById('stripAutoRenew').innerHTML = '<span style="color: #34d399;">✅ 45m Auto-Renew Active</span>';
         } else {
           document.getElementById('stripAutoRenew').innerHTML = '<span style="color: #f59e0b;">⚠️ Manual Token Only</span>';
+        }
+
+        // Applied History Data & Sound Chime on increase
+        if (Array.isArray(data.appliedHistory)) {
+          appliedHistoryData = data.appliedHistory;
+          const currentCount = appliedHistoryData.length;
+          document.getElementById('appliedBadgeCount').innerText = currentCount;
+          document.getElementById('drawerBadgeCount').innerText = currentCount + ' Total';
+
+          if (previousAppliedCount > 0 && currentCount > previousAppliedCount) {
+            playChime();
+            showToast('🎉 NEW JOB APPLICATION SUBMITTED!');
+          }
+          previousAppliedCount = currentCount;
         }
 
         // Stats
@@ -891,6 +1194,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
       return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    updateSoundUI();
     fetchData();
     setInterval(fetchData, 2500);
     countdownInterval = setInterval(updateCountdown, 1000);
@@ -922,12 +1226,14 @@ const server = http.createServer(async (req, res) => {
     const logs = getLogLines(LOG_FILE, 70);
     const stats = parseStatsFromLogs(logs);
     const runtimeConfig = getRuntimeConfig();
+    const appliedHistory = getAppliedDemandsList();
+    const latency = await checkPortalLatency();
 
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*'
     });
-    return res.end(JSON.stringify({ pm2, token, hasRefreshToken: hasRefresh, stats, logs, runtimeConfig }));
+    return res.end(JSON.stringify({ pm2, token, hasRefreshToken: hasRefresh, stats, logs, runtimeConfig, appliedHistory, latency }));
   }
 
   // POST /api/config/interval
