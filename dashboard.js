@@ -13,6 +13,16 @@ const HOST = '127.0.0.1'; // Strictly loopback only for zero-exposure security
 const TOKEN_FILE = path.join(__dirname, 'token.txt');
 const REFRESH_TOKEN_FILE = path.join(__dirname, 'refresh-token.txt');
 const APPLIED_FILE = path.join(__dirname, 'applied-demands.json');
+const STATS_FILE = path.join(__dirname, 'stats.json');
+
+function getStoredStats() {
+  try {
+    if (fs.existsSync(STATS_FILE)) {
+      return JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
+    }
+  } catch (e) {}
+  return null;
+}
 const LOG_FILE = path.join(process.env.HOME || '/home/ec2-user', '.pm2', 'logs', 'prod-automator-out.log');
 
 let cachedLatency = 42;
