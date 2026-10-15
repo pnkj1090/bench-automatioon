@@ -35,6 +35,23 @@ function saveAppliedRecord(record) {
   }
 }
 
+const STATS_FILE = path.join(__dirname, "stats.json");
+
+function getStoredStats() {
+  try {
+    if (fs.existsSync(STATS_FILE)) {
+      return JSON.parse(fs.readFileSync(STATS_FILE, "utf8"));
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveEngineStats(stats) {
+  try {
+    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), "utf8");
+  } catch (e) {}
+}
+
 
 export class DemandAutomationEngine {
   constructor(options = {}) {
@@ -53,14 +70,15 @@ export class DemandAutomationEngine {
     this.onLogCallback = options.onLog || null;
     this.lastStandbyLogged = 0;
 
+    const storedStats = getStoredStats() || {};
     this.stats = {
-      cyclesCount: 0,
-      totalEvaluated: 0,
+      cyclesCount: storedStats.cyclesCount || 0,
+      totalEvaluated: storedStats.totalEvaluated || 0,
       totalApplied: existingApplied.length,
-      lastLatencyMs: 0,
-      totalSkippedAlreadyApplied: 0,
-      totalSkippedPythonOnly: 0,
-      lastCycleTime: null
+      lastLatencyMs: storedStats.lastLatencyMs || 0,
+      totalSkippedAlreadyApplied: storedStats.totalSkippedAlreadyApplied || 0,
+      totalSkippedPythonOnly: storedStats.totalSkippedPythonOnly || 0,
+      lastCycleTime: storedStats.lastCycleTime || null
     };
   }
 
@@ -349,6 +367,8 @@ export class DemandAutomationEngine {
         await this.applyForDemand(demand);
       }
 
+      saveEngineStats(this.stats);
+
     } catch (err) {
       this.log("ERROR", `Cycle #${this.stats.cyclesCount} failed: ${err.message}`);
     }
@@ -434,6 +454,7 @@ export class DemandAutomationEngine {
       });
       this.appliedDemands.add(demandId);
       this.stats.totalApplied++;
+      saveEngineStats(this.stats);
       this.log("SUCCESS", `🎉 APPLIED to ${demandId} (${demand.genus})! Skills checked: ${checkedSkills.length}. AI pitch submitted.`);
 
       // WhatsApp Notification (non-blocking, failsafe)

@@ -1081,11 +1081,25 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
         // Stats
         if (data.stats) {
-          document.getElementById('valCycles').innerText = '#' + data.stats.cycles;
-          document.getElementById('valEvaluated').innerText = (data.stats.cycles * 2);
-          document.getElementById('valSkipped').innerText = (data.stats.skippedAlreadyApplied + data.stats.skippedPythonOnly);
-          document.getElementById('valApplied').innerText = data.stats.applied;
-          document.getElementById('valLastScan').innerText = 'Last: ' + data.stats.lastScan;
+          const cycles = data.stats.cyclesCount !== undefined ? data.stats.cyclesCount : data.stats.cycles;
+          const evaluated = data.stats.totalEvaluated !== undefined ? data.stats.totalEvaluated : cycles;
+          const skipped = data.stats.totalSkippedAlreadyApplied !== undefined
+            ? ((data.stats.totalSkippedAlreadyApplied || 0) + (data.stats.totalSkippedPythonOnly || 0))
+            : ((data.stats.skippedAlreadyApplied || 0) + (data.stats.skippedPythonOnly || 0));
+          const applied = data.stats.totalApplied !== undefined ? data.stats.totalApplied : data.stats.applied;
+
+          document.getElementById('valCycles').innerText = '#' + cycles;
+          document.getElementById('valEvaluated').innerText = evaluated;
+          document.getElementById('valSkipped').innerText = skipped;
+          document.getElementById('valApplied').innerText = applied;
+          
+          let lastTimeStr = data.stats.lastScan;
+          if (data.stats.lastCycleTime) {
+            try {
+              lastTimeStr = new Date(data.stats.lastCycleTime).toLocaleTimeString("en-US", { hour12: false, timeZone: "Asia/Kolkata" });
+            } catch(e) {}
+          }
+          document.getElementById('valLastScan').innerText = 'Last: ' + lastTimeStr;
         }
 
         // Logs
@@ -1359,7 +1373,8 @@ const server = http.createServer(async (req, res) => {
     const token = parseJwt(storedToken);
     const hasRefresh = hasRefreshToken();
     const logs = getLogLines(LOG_FILE, 70);
-    const stats = parseStatsFromLogs(logs);
+    const storedStats = getStoredStats();
+    const stats = storedStats || parseStatsFromLogs(logs);
     const runtimeConfig = getRuntimeConfig();
     const appliedHistory = getAppliedDemandsList();
     const latency = await checkPortalLatency();
