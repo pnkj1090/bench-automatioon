@@ -7,6 +7,7 @@ import { CONFIG, getRuntimeConfig } from "./config.js";
 import { evaluateDemand } from "./classifier.js";
 import { generateCandidatePitch } from "./ai-pitch-generator.js";
 import { refreshAccessToken } from "./renew-token.js";
+import { sendWhatsAppNotification } from "./whatsapp.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -434,6 +435,19 @@ export class DemandAutomationEngine {
       this.appliedDemands.add(demandId);
       this.stats.totalApplied++;
       this.log("SUCCESS", `🎉 APPLIED to ${demandId} (${demand.genus})! Skills checked: ${checkedSkills.length}. AI pitch submitted.`);
+
+      // WhatsApp Notification (non-blocking, failsafe)
+      sendWhatsAppNotification({
+        demandId,
+        genus: demand.genus,
+        location: demand.location,
+        skills: checkedSkills,
+        pitch: aiPitch
+      }).then(res => {
+        if (res && res.success) {
+          this.log("INFO", `📲 WhatsApp alert dispatched for Demand ${demandId}.`);
+        }
+      }).catch(() => {});
 
     } catch (err) {
       this.log("ERROR", `[${demandId}] Application submission failed: ${err.message}`);

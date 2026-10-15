@@ -376,6 +376,12 @@ const HTML_CONTENT = `<!DOCTYPE html>
       color: #34d399;
     }
     .btn-history:hover { background: rgba(16, 185, 129, 0.22); }
+    .btn-whatsapp {
+      background: rgba(37, 211, 102, 0.12);
+      border-color: rgba(37, 211, 102, 0.3);
+      color: #25d366;
+    }
+    .btn-whatsapp:hover { background: rgba(37, 211, 102, 0.22); color: #fff; }
     .btn-sound {
       background: rgba(255, 255, 255, 0.05);
       border-color: rgba(255, 255, 255, 0.12);
@@ -646,6 +652,11 @@ const HTML_CONTENT = `<!DOCTYPE html>
           🔔 Sound: ON
         </button>
 
+        <!-- WhatsApp Setup -->
+        <button class="btn btn-whatsapp" onclick="openWhatsAppModal()" title="Configure instant WhatsApp alerts when demands are auto-applied">
+          📲 WhatsApp
+        </button>
+
         <button id="btnPauseResume" class="btn btn-pause" onclick="togglePauseResume()">
           <span id="iconPR">⏸️</span> <span id="textPR">Pause</span>
         </button>
@@ -756,6 +767,45 @@ const HTML_CONTENT = `<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- WhatsApp Notification Modal -->
+  <div id="whatsappModal" class="modal-overlay" onclick="if(event.target===this) closeWhatsAppModal()">
+    <div class="modal-box" style="max-width: 480px;">
+      <h2 class="modal-title">📲 WhatsApp Auto-Apply Alerts</h2>
+      <p class="modal-desc">Get an instant WhatsApp notification with full demand details and AI pitch whenever a job is auto-applied via free CallMeBot API.</p>
+      
+      <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+        <span style="font-size: 13px; font-weight: 600;">Enable WhatsApp Alerts:</span>
+        <label style="position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="chkWhatsAppEnabled" style="width: 18px; height: 18px; cursor: pointer; accent-color: #25d366;">
+          <span style="font-size: 12px; color: var(--text-muted);">Active</span>
+        </label>
+      </div>
+
+      <div style="margin-bottom: 10px;">
+        <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">WhatsApp Number (with country code):</label>
+        <input type="text" id="inputWhatsAppPhone" class="interval-input" style="width: 100%; box-sizing: border-box; text-align: left; padding: 6px 10px; font-size: 13px;" placeholder="+919876543210">
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">CallMeBot API Key:</label>
+        <input type="text" id="inputWhatsAppApiKey" class="interval-input" style="width: 100%; box-sizing: border-box; text-align: left; padding: 6px 10px; font-size: 13px;" placeholder="e.g. 123456">
+      </div>
+
+      <div style="background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.25); border-radius: 6px; padding: 8px 10px; font-size: 11px; line-height: 1.4; color: #93c5fd; margin-bottom: 14px;">
+        💡 <b>How to get your free CallMeBot API key (takes 30 seconds):</b><br>
+        1. Save <b>+34 644 68 83 34</b> to your phone contacts as <i>CallMeBot</i>.<br>
+        2. Send WhatsApp message: <code>I allow callmebot to send me messages</code><br>
+        3. Copy the apiKey from their reply and paste it here.
+      </div>
+
+      <div class="modal-actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button class="btn btn-outline" onclick="closeWhatsAppModal()">Close</button>
+        <button class="btn btn-outline" style="border-color: rgba(37, 211, 102, 0.4); color: #25d366;" onclick="testWhatsAppMessage()" id="btnTestWhatsApp">🧪 Send Test</button>
+        <button class="btn btn-token" style="background: linear-gradient(135deg, #059669, #10b981);" onclick="saveWhatsAppSettings()" id="btnSaveWhatsApp">💾 Save Settings</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Token Modal -->
   <div id="tokenModal" class="modal-overlay" onclick="if(event.target===this) closeTokenModal()">
     <div class="modal-box">
@@ -782,6 +832,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
     let previousAppliedCount = 0;
     let soundEnabled = localStorage.getItem('soundAlerts') !== 'false';
     let appliedHistoryData = [];
+    let currentWhatsAppConfig = { enabled: false, phone: "", apiKey: "" };
 
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
@@ -988,6 +1039,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
             : !Boolean(data.runtimeConfig.standbyOverride);
           isOverrideActive = !isAutoStandby;
           currentInterval = data.runtimeConfig.pollIntervalSeconds || 30;
+          if (data.runtimeConfig.whatsapp) {
+            currentWhatsAppConfig = data.runtimeConfig.whatsapp;
+          }
 
           const inputInt = document.getElementById('inputInterval');
           if (document.activeElement !== inputInt) {
@@ -1157,6 +1211,78 @@ const HTML_CONTENT = `<!DOCTYPE html>
       }
     }
 
+    function openWhatsAppModal() {
+      const cfg = currentWhatsAppConfig || {};
+      document.getElementById("chkWhatsAppEnabled").checked = Boolean(cfg.enabled);
+      document.getElementById("inputWhatsAppPhone").value = cfg.phone || "";
+      document.getElementById("inputWhatsAppApiKey").value = cfg.apiKey || "";
+      document.getElementById("whatsappModal").classList.add("open");
+    }
+
+    function closeWhatsAppModal() {
+      document.getElementById("whatsappModal").classList.remove("open");
+    }
+
+    async function testWhatsAppMessage() {
+      const phone = document.getElementById("inputWhatsAppPhone").value.trim();
+      const apiKey = document.getElementById("inputWhatsAppApiKey").value.trim();
+      if (!phone || !apiKey) {
+        alert("Please enter both your phone number and CallMeBot API key.");
+        return;
+      }
+      const btn = document.getElementById("btnTestWhatsApp");
+      btn.disabled = true;
+      btn.innerText = "Sending...";
+      try {
+        const res = await fetch("/api/whatsapp/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, apiKey })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("✅ WhatsApp test message delivered! Check your phone.");
+        } else {
+          showToast("Failed to send test: " + (data.error || "Check phone/API key"), true);
+        }
+      } catch (e) {
+        showToast("Error: " + e.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🧪 Send Test";
+      }
+    }
+
+    async function saveWhatsAppSettings() {
+      const enabled = document.getElementById("chkWhatsAppEnabled").checked;
+      const phone = document.getElementById("inputWhatsAppPhone").value.trim();
+      const apiKey = document.getElementById("inputWhatsAppApiKey").value.trim();
+
+      const btn = document.getElementById("btnSaveWhatsApp");
+      btn.disabled = true;
+      btn.innerText = "Saving...";
+      try {
+        const res = await fetch("/api/config/whatsapp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled, phone, apiKey })
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentWhatsAppConfig = data.whatsapp;
+          showToast(enabled ? "✅ WhatsApp alerts ENABLED!" : "WhatsApp alerts saved.");
+          closeWhatsAppModal();
+        } else {
+          showToast("Failed to save WhatsApp config", true);
+        }
+      } catch (e) {
+        showToast("Error: " + e.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "💾 Save Settings";
+      }
+    }
+
     function openTokenModal() {
       document.getElementById('tokenModal').classList.add('open');
       document.getElementById('tokenInput').focus();
@@ -1290,6 +1416,29 @@ const server = http.createServer(async (req, res) => {
       }));
     });
     return;
+  }
+
+  // POST /api/config/whatsapp
+  if (pathname === "/api/config/whatsapp" && method === "POST") {
+    const body = await parseJsonBody(req);
+    const whatsapp = {
+      enabled: Boolean(body.enabled),
+      phone: (body.phone || "").trim(),
+      apiKey: (body.apiKey || "").trim()
+    };
+    const updated = saveRuntimeConfig({ whatsapp });
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    return res.end(JSON.stringify({ success: true, whatsapp: updated.whatsapp }));
+  }
+
+  // POST /api/whatsapp/test
+  if (pathname === "/api/whatsapp/test" && method === "POST") {
+    const body = await parseJsonBody(req);
+    const phone = (body.phone || "").trim();
+    const apiKey = (body.apiKey || "").trim();
+    const result = await sendTestWhatsAppMessage(phone, apiKey);
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    return res.end(JSON.stringify(result));
   }
 
   // POST /api/token/update
