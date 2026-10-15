@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Opportunistic Placement — Portal & Automation Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="brand-badge">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+      </div>
+      <div class="brand-title">
+        <h1>Opportunistic Placement</h1>
+        <span class="sub-text">Internal Opportunities & Demand Portal</span>
+      </div>
+    </div>
+
+    <!-- Mode Selector & Live Engine Badge -->
+    <div class="header-center">
+      <div class="engine-pill" id="enginePill">
+        <span class="pulse-dot active" id="pulseDot"></span>
+        <span class="engine-state-text" id="engineStateText">Automation: RUNNING (Every 30s)</span>
+        <span class="countdown-badge" id="countdownBadge">30s</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="user-chip">
+        <div class="avatar">AU</div>
+        <div class="user-details">
+          <span class="name">Automation Candidate</span>
+          <span class="role">Bench Pool &bull; Gurugram</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Automation Control Dock -->
+  <section class="automation-dock">
+    <div class="dock-row">
+      <div class="dock-controls">
+        <button id="toggleEngineBtn" class="dock-btn btn-primary">
+          <span id="btnIcon">⏸</span> <span id="btnText">Pause Automation</span>
+        </button>
+        <button id="tickNowBtn" class="dock-btn btn-secondary">
+          ⚡ Trigger Check Now
+        </button>
+        <div class="target-picker">
+          <label>Target:</label>
+          <select id="targetEnvSelect">
+            <option value="mock" selected>Mock Clone (http://localhost:3000)</option>
+            <option value="prod">Production Azure (opportunistic-placement...)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dock-stats">
+        <div class="stat-card">
+          <span class="stat-num" id="statCycles">0</span>
+          <span class="stat-label">Cycles</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" id="statEvaluated">0</span>
+          <span class="stat-label">Evaluated</span>
+        </div>
+        <div class="stat-card highlight-success">
+          <span class="stat-num" id="statApplied">0</span>
+          <span class="stat-label">Applied</span>
+        </div>
+        <div class="stat-card highlight-warn">
+          <span class="stat-num" id="statSkippedPython">0</span>
+          <span class="stat-label">Skipped (Only Python)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Scenario Injectors for Live Testing -->
+    <div class="dock-subrow">
+      <span class="dock-hint">⚡ Test Scenarios:</span>
+      <button class="chip-btn" id="addFrontendJobBtn">+ Inject Frontend Job (Will Apply)</button>
+      <button class="chip-btn" id="addPythonJobBtn">+ Inject Python Only Job (Will Skip)</button>
+      <button class="chip-btn" id="addMixedJobBtn">+ Inject Frontend+Python Job (Will Apply)</button>
+      <button class="chip-btn btn-danger-soft" id="resetMockBtn">↺ Reset Mock DB</button>
+      <button class="chip-btn btn-ghost" id="toggleLogsBtn">📋 View Live Logs (<span id="logCountBadge">0</span>)</button>
+    </div>
+
+    <!-- Collapsible Live Logs Console -->
+    <div class="logs-drawer" id="logsDrawer">
+      <div class="drawer-header">
+        <span>Live Automation Stream</span>
+        <button class="close-logs-btn" id="closeLogsBtn">&times;</button>
+      </div>
+      <div class="logs-terminal" id="logsTerminal">
+        <div class="log-line info">[INIT] Automation ready. Initializing 30s poll cycle...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filter Bar matching the screenshots -->
+  <main class="main-container">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label class="filter-label">Profile / Genus Selection</label>
+        <div class="multi-select-box" id="genusBox">
+          <div class="select-display" id="genusDisplay">
+            <span class="selected-summary">2.1-PYTHON, 2.2-PYTHON, 2.3-PYTHON, 3.1-FRONTEND-ANGULAR... (+12)</span>
+            <span class="dropdown-arrow">&#9662;</span>
+          </div>
+          <div class="multi-select-popup" id="genusPopup">
+            <div class="popup-header">
+              <span>Active Genus Filter (16 selected)</span>
+              <button type="button" class="mini-btn" id="selectAllGenusBtn">All</button>
+            </div>
+            <div class="options-list" id="genusOptionsList">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Location Selection</label>
+        <div class="multi-select-box" id="locationBox">
+          <div class="select-display" id="locationDisplay">
+            <span class="selected-summary">India - Gurugram, Haryana, India - WFA</span>
+            <span class="dropdown-arrow">&#9662;</span>
+          </div>
+          <div class="multi-select-popup" id="locationPopup">
+            <div class="popup-header">
+              <span>Active Location</span>
+            </div>
+            <div class="options-list">
+              <label class="check-item">
+                <input type="checkbox" checked value="India - Gurugram, Haryana, India - WFA">
+                <span>India - Gurugram, Haryana, India - WFA</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-actions">
+        <button class="filter-btn btn-apply" id="applyFiltersBtn">Apply Filters</button>
+        <button class="filter-btn btn-clear" id="clearFiltersBtn">Reset</button>
+      </div>
+    </div>
+
+    <!-- Active Filters Summary Tags -->
+    <div class="active-tags-row">
+      <span class="tags-title">Current Criteria:</span>
+      <span class="active-chip">📍 India - Gurugram, Haryana, India - WFA</span>
+      <span class="active-chip">🏷️ 16 Genus Roles (Python + Frontend)</span>
+      <span class="active-chip highlight-rule">Rule: Frontend or Frontend+Python ONLY (Skip Python-only)</span>
+      <span class="feed-count" id="feedCount">Showing 8 demands</span>
+    </div>
+
+    <!-- Demands Cards Grid -->
+    <section class="demands-grid" id="demandsGrid">
+      <!-- Cards rendered via JS -->
+    </section>
+  </main>
+
+  <!-- Apply Modal (Exact portal recreation) -->
+  <div class="modal-backdrop" id="applyModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="modalDemandTitle">Submit Details for Demand</h3>
+        <button class="modal-close" id="closeModalBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-form-group">
+          <label>Upload Resume *</label>
+          <div class="file-drop-zone">
+            <input type="file" id="modalResumeInput" accept=".pdf,.doc,.docx">
+            <div class="drop-label" id="fileDropLabel">
+              <span class="icon">📄</span>
+              <span class="text">resume.pdf (Automated Upload Prepared)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-form-group">
+          <label>Must Have Skills *</label>
+          <div class="skills-selector" id="modalSkillsList">
+            <!-- Selected skills pills -->
+          </div>
+        </div>
+
+        <div class="modal-form-group">
+          <label>What sets you apart as a strong candidate for this role? (Max 2000 chars) *</label>
+          <textarea id="modalCandidateComments" rows="4" maxlength="2000" placeholder="Highlight relevant achievements, architecture experience, and domain expertise..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn btn-cancel" id="cancelModalBtn">Cancel</button>
+        <button class="modal-btn btn-submit" id="submitModalBtn">Submit Application</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

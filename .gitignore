@@ -1,0 +1,21 @@
+# Security: Private Keys & Credentials
+*.pem
+*.env
+.env*
+token.txt
+refresh-token.txt
+
+# Resumes & Personal Documents
+*.docx
+*.pdf
+
+# Deployment Info & Local State
+aws-deployment-info.json
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Logs & Dumps
+*.log
+.pm2/

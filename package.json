@@ -1,0 +1,16 @@
+{
+  "name": "demand-automation-suite",
+  "version": "1.0.0",
+  "description": "Opportunistic Placement Demand Automation, Filtering, and Testing Clone",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "worker:mock": "node worker.js --target=mock",
+    "worker:prod": "node worker.js --target=prod"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ec2": "^3.1152.0",
+    "dotenv": "^18.0.8"
+  }
+}
