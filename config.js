@@ -4,12 +4,37 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const RUNTIME_CONFIG_FILE = path.join(__dirname, 'runtime-config.json');
+
+export function getRuntimeConfig() {
+  try {
+    if (fs.existsSync(RUNTIME_CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(RUNTIME_CONFIG_FILE, 'utf8'));
+    }
+  } catch (e) {}
+  return { pollIntervalSeconds: 30, standbyOverride: false };
+}
+
+export function saveRuntimeConfig(newConfig) {
+  try {
+    const current = getRuntimeConfig();
+    const updated = { ...current, ...newConfig };
+    fs.writeFileSync(RUNTIME_CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
+    return updated;
+  } catch (e) {
+    console.error("Failed to save runtime config:", e);
+    return null;
+  }
+}
 
 // Configuration for Demand Automation & Filter Rules
 
 export const CONFIG = {
-  // Polling interval in milliseconds (every 30 seconds as requested)
-  pollIntervalMs: 30000,
+  // Polling interval in milliseconds (defaults to 30s or runtime config)
+  get pollIntervalMs() {
+    const rc = getRuntimeConfig();
+    return (rc.pollIntervalSeconds || 30) * 1000;
+  },
 
   // Operating Schedule (IST Timezone: Mon-Fri, 8:00 AM - 8:00 PM IST; Excludes Sat & Sun)
   schedule: {

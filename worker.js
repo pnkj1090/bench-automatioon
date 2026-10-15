@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { DemandAutomationEngine } from './engine.js';
-import { CONFIG } from './config.js';
+import { CONFIG, getRuntimeConfig } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,7 +50,7 @@ const worker = new DemandAutomationEngine({
   target,
   baseUrl,
   authToken,
-  intervalMs: CONFIG.pollIntervalMs,
+  intervalMs: ((getRuntimeConfig().pollIntervalSeconds || 30) * 1000),
   onLog: (entry) => {
     // Already logged to stdout in engine
   }

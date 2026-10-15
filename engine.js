@@ -3,7 +3,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { CONFIG } from "./config.js";
+import { CONFIG, getRuntimeConfig } from "./config.js";
 import { evaluateDemand } from "./classifier.js";
 import { generateCandidatePitch } from "./ai-pitch-generator.js";
 import { refreshAccessToken } from "./renew-token.js";
@@ -40,6 +40,10 @@ export class DemandAutomationEngine {
   }
 
   isWithinOperatingHours() {
+    const runtime = getRuntimeConfig();
+    if (runtime.standbyOverride === true) {
+      return true; // Manual override: run immediately anytime
+    }
     if (!CONFIG.schedule || !CONFIG.schedule.enabled) return true;
     try {
       const istString = new Date().toLocaleString("en-US", { timeZone: CONFIG.schedule.timezone || "Asia/Kolkata" });
@@ -188,6 +192,9 @@ export class DemandAutomationEngine {
   }
 
   async tick() {
+    const runtime = getRuntimeConfig();
+    const isOverride = runtime.standbyOverride === true;
+
     // Check Monday - Friday (8:00 AM - 8:00 PM IST) Operational Window
     if (!this.isWithinOperatingHours()) {
       if (!this.lastStandbyLogged || (Date.now() - this.lastStandbyLogged > 30 * 60 * 1000)) {
@@ -195,6 +202,12 @@ export class DemandAutomationEngine {
         this.lastStandbyLogged = Date.now();
       }
       return;
+    }
+    if (isOverride && !this.overrideLogged) {
+      this.log("INFO", "⚡ Standby override ACTIVE: Running automation outside normal schedule as requested.");
+      this.overrideLogged = true;
+    } else if (!isOverride) {
+      this.overrideLogged = false;
     }
     this.lastStandbyLogged = 0;
 

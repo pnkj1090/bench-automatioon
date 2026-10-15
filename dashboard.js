@@ -1,38 +1,37 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
-import { refreshAccessToken } from './renew-token.js';
+import { exec } from 'child_process';
+import { CONFIG, getRuntimeConfig, saveRuntimeConfig } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 const PORT = process.env.PORT || 3000;
+const HOST = '127.0.0.1'; // Strictly loopback only for zero-exposure security
 const TOKEN_FILE = path.join(__dirname, 'token.txt');
 const REFRESH_TOKEN_FILE = path.join(__dirname, 'refresh-token.txt');
-const LOG_FILE = process.env.LOG_FILE || path.join(process.env.HOME || '/home/ec2-user', '.pm2/logs/prod-automator-out.log');
+const LOG_FILE = path.join(process.env.HOME || '/home/ec2-user', '.pm2', 'logs', 'prod-automator-out.log');
 
 function parseJwt(token) {
-  if (!token || typeof token !== 'string') return null;
-  const cleaned = token.replace(/^Bearer\s+/i, '').replace(/^['"]|['"]$/g, '').trim();
   try {
-    const parts = cleaned.split('.');
-    if (parts.length < 2) return null;
-    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = Buffer.from(base64, 'base64').toString('utf8');
-    const payload = JSON.parse(jsonPayload);
-    const nowSec = Math.floor(Date.now() / 1000);
-    const exp = payload.exp || 0;
-    const remainingSec = exp - nowSec;
+    const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      Buffer.from(base64, 'base64')
+        .toString('binary')
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const parsed = JSON.parse(jsonPayload);
     return {
-      isValid: true,
-      name: payload.name || payload.given_name || 'Nagarro Candidate',
-      email: payload.upn || payload.unique_name || payload.email || 'pankaj.kumar07@nagarro.com',
-      exp: exp,
-      expIso: new Date(exp * 1000).toISOString(),
-      isExpired: remainingSec <= 0,
-      remainingSec: remainingSec,
-      maskedToken: cleaned.substring(0, 16) + '...' + cleaned.substring(cleaned.length - 12)
+      name: parsed.name || parsed.given_name || 'Nagarro Candidate',
+      email: parsed.upn || parsed.unique_name || parsed.email || 'pankaj.kumar07@nagarro.com',
+      exp: parsed.exp,
+      validMinutes: Math.max(0, Math.round((parsed.exp - Math.floor(Date.now() / 1000)) / 60))
     };
   } catch (e) {
     return null;
@@ -40,12 +39,11 @@ function parseJwt(token) {
 }
 
 function getStoredToken() {
-  if (fs.existsSync(TOKEN_FILE)) {
-    try {
-      const t = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
-      if (t) return t;
-    } catch (e) {}
-  }
+  try {
+    if (fs.existsSync(TOKEN_FILE)) {
+      return fs.readFileSync(TOKEN_FILE, 'utf8').trim();
+    }
+  } catch (e) {}
   return null;
 }
 
@@ -57,37 +55,41 @@ function hasRefreshToken() {
   }
 }
 
+function getLogLines(filePath, maxLines = 80) {
+  try {
+    if (!fs.existsSync(filePath)) return ['No logs available yet.'];
+    const data = fs.readFileSync(filePath, 'utf8');
+    const lines = data.split('\n').filter(Boolean);
+    return lines.slice(-maxLines);
+  } catch (e) {
+    return [`Error reading logs: ${e.message}`];
+  }
+}
+
 function getPm2Status() {
   return new Promise((resolve) => {
     exec('pm2 jlist', (err, stdout) => {
-      if (err) return resolve({ status: 'unknown', uptime: 0, cpu: 0, memoryMb: 0 });
+      if (err || !stdout) {
+        return resolve({ status: 'unknown', memoryMb: 0, cpu: 0, uptime: 0 });
+      }
       try {
         const list = JSON.parse(stdout);
         const proc = list.find(p => p.name === 'prod-automator');
-        if (!proc) return resolve({ status: 'stopped', uptime: 0, cpu: 0, memoryMb: 0 });
-        return resolve({
-          status: proc.pm2_env.status,
-          uptime: proc.pm2_env.pm_uptime ? Math.floor((Date.now() - proc.pm2_env.pm_uptime) / 1000) : 0,
-          restarts: proc.pm2_env.restart_time || 0,
-          cpu: proc.monit ? proc.monit.cpu : 0,
-          memoryMb: proc.monit ? Math.round(proc.monit.memory / (1024 * 1024)) : 0
-        });
+        if (proc) {
+          resolve({
+            status: proc.pm2_env.status,
+            memoryMb: Math.round((proc.monit.memory || 0) / 1024 / 1024),
+            cpu: proc.monit.cpu || 0,
+            uptime: Math.round((Date.now() - proc.pm2_env.pm_uptime) / 1000)
+          });
+        } else {
+          resolve({ status: 'not found', memoryMb: 0, cpu: 0, uptime: 0 });
+        }
       } catch (e) {
-        resolve({ status: 'unknown', uptime: 0, cpu: 0, memoryMb: 0 });
+        resolve({ status: 'error', memoryMb: 0, cpu: 0, uptime: 0 });
       }
     });
   });
-}
-
-function getLogLines(filePath, maxLines = 80) {
-  try {
-    if (!fs.existsSync(filePath)) return [];
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.split('\n').filter(Boolean);
-    return lines.slice(-maxLines);
-  } catch (e) {
-    return [`Error reading log file: ${e.message}`];
-  }
 }
 
 function parseStatsFromLogs(lines) {
@@ -125,7 +127,6 @@ function parseJsonBody(req) {
         resolve({});
       }
     });
-    req.on('error', reject);
   });
 }
 
@@ -134,61 +135,148 @@ const HTML_CONTENT = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Opportunistic Placement — Live Automation Suite</title>
+  <title>Demand Automator • Mission Control</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0b0f19;
-      --card-bg: rgba(18, 24, 38, 0.85);
+      --bg: #07090e;
+      --card-bg: rgba(15, 23, 42, 0.7);
       --card-border: rgba(255, 255, 255, 0.08);
       --primary: #3b82f6;
       --success: #10b981;
       --warning: #f59e0b;
       --danger: #ef4444;
+      --purple: #8b5cf6;
       --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
+      --text-muted: #94a3b8;
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
+    html, body {
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
       background-color: var(--bg);
       color: var(--text-main);
       font-family: var(--font-sans);
-      min-height: 100vh;
-      padding: 24px;
-      line-height: 1.5;
+      line-height: 1.35;
+      font-size: 13px;
     }
-    .container { max-width: 1200px; margin: 0 auto; }
 
+    /* Single Screen Viewport Container */
+    .app-viewport {
+      height: 100vh;
+      max-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 10px 14px;
+      gap: 8px;
+      box-sizing: border-box;
+    }
+
+    /* 1. Header Bar */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: 24px;
-      border-bottom: 1px solid var(--card-border);
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-      gap: 16px;
+      padding: 6px 12px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      backdrop-filter: blur(12px);
+      flex-shrink: 0;
+      gap: 12px;
     }
-    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
     .brand-icon {
-      width: 44px; height: 44px;
+      width: 32px; height: 32px;
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      border-radius: 12px;
+      border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3);
+      font-size: 16px;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
-    .brand-title h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
-    .brand-title p { font-size: 13px; color: var(--text-muted); }
-    .header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .brand-title h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+    .brand-title p { font-size: 11px; color: var(--text-muted); }
 
+    .header-center { display: flex; align-items: center; gap: 10px; }
+
+    /* Interval Input Form */
+    .interval-box {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 3px 8px;
+      font-size: 12px;
+    }
+    .interval-box label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; }
+    .interval-input {
+      width: 44px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      padding: 2px 4px;
+    }
+    .interval-input:focus { outline: none; border-color: var(--primary); }
+    .btn-save-interval {
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #60a5fa;
+      border-radius: 5px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-save-interval:hover { background: #2563eb; color: #fff; }
+
+    /* Standby Switch / Override */
+    .standby-widget {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 3px 8px;
+    }
+    .standby-badge {
+      font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+    }
+    .standby-badge.standby { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .standby-badge.override { background: rgba(139, 92, 246, 0.2); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.4); }
+    .standby-badge.active { background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+    .btn-override {
+      font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; transition: all 0.15s;
+    }
+    .btn-override.force-run {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(217, 119, 6, 0.4);
+    }
+    .btn-override.force-run:hover { background: #b45309; }
+    .btn-override.restore-standby {
+      background: rgba(139, 92, 246, 0.2);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: #c084fc;
+    }
+    .btn-override.restore-standby:hover { background: rgba(139, 92, 246, 0.35); color: #fff; }
+
+    /* Action buttons */
+    .header-actions { display: flex; align-items: center; gap: 8px; }
     .status-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 8px 16px; border-radius: 9999px;
-      font-size: 13px; font-weight: 600;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 9999px;
+      font-size: 11px; font-weight: 700;
     }
     .status-badge.online {
       background: rgba(16, 185, 129, 0.12);
@@ -200,431 +288,372 @@ const HTML_CONTENT = `<!DOCTYPE html>
       border: 1px solid rgba(239, 68, 68, 0.3);
       color: var(--danger);
     }
-    .pulse-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .pulse-dot { width: 6px; height: 6px; border-radius: 50%; }
     .status-badge.online .pulse-dot {
       background: var(--success);
-      box-shadow: 0 0 10px var(--success);
+      box-shadow: 0 0 8px var(--success);
       animation: pulse 2s infinite;
     }
     .status-badge.stopped .pulse-dot { background: var(--danger); }
     @keyframes pulse {
       0% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(1.2); }
+      50% { opacity: 0.4; transform: scale(1.3); }
       100% { opacity: 1; transform: scale(1); }
     }
 
     .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 8px 16px; border-radius: 10px;
-      font-size: 13px; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 11px; border-radius: 7px;
+      font-size: 11px; font-weight: 600; cursor: pointer;
       border: 1px solid transparent;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.15s ease;
     }
-    .btn-primary { background: #2563eb; color: #fff; }
-    .btn-primary:hover { background: #1d4ed8; transform: translateY(-1px); }
     .btn-pause {
       background: rgba(245, 158, 11, 0.15);
       border-color: rgba(245, 158, 11, 0.3);
       color: #fbbf24;
     }
-    .btn-pause:hover { background: rgba(245, 158, 11, 0.25); }
+    .btn-pause:hover { background: rgba(245, 158, 11, 0.28); }
     .btn-resume {
       background: rgba(16, 185, 129, 0.15);
       border-color: rgba(16, 185, 129, 0.3);
       color: #34d399;
     }
-    .btn-resume:hover { background: rgba(16, 185, 129, 0.25); }
+    .btn-resume:hover { background: rgba(16, 185, 129, 0.28); }
     .btn-outline {
       background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.12);
       color: #fff;
     }
     .btn-outline:hover { background: rgba(255, 255, 255, 0.12); }
+    .btn-token {
+      background: linear-gradient(135deg, #1e40af, #2563eb);
+      color: #fff;
+    }
+    .btn-token:hover { background: #1d4ed8; }
 
-    /* TOKEN BANNER CARD */
-    .token-card {
-      background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 16px;
-      padding: 20px 24px;
-      margin-bottom: 24px;
+    /* 2. Compact Status Strip */
+    .status-strip {
+      display: grid;
+      grid-template-columns: 1.2fr 0.9fr 1.1fr 1fr;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid var(--card-border);
+      border-radius: 9px;
+      padding: 6px 12px;
+      flex-shrink: 0;
+      align-items: center;
+    }
+    .strip-item {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .strip-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 600; }
+    .strip-val { font-weight: 600; color: #fff; }
+    .token-pill {
+      font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px;
+    }
+    .token-pill.valid { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .token-pill.warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .token-pill.expired { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+    /* 3. Compact Metrics Row */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 9px;
+      padding: 8px 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
     }
-    .token-left { display: flex; align-items: center; gap: 16px; }
-    .token-icon-wrapper {
-      width: 48px; height: 48px; border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(59, 130, 246, 0.15);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-    }
-    .token-title {
-      font-size: 16px; font-weight: 700; color: #fff;
-      display: flex; align-items: center; gap: 10px;
-    }
-    .token-expiry-pill {
-      padding: 3px 10px; border-radius: 9999px;
-      font-size: 12px; font-weight: 700; font-family: var(--font-mono);
-    }
-    .token-expiry-pill.valid {
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #34d399;
-    }
-    .token-expiry-pill.warning {
-      background: rgba(245, 158, 11, 0.15);
-      border: 1px solid rgba(245, 158, 11, 0.3);
-      color: #fbbf24;
-    }
-    .token-expiry-pill.expired {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #f87171;
-    }
-    .auto-renew-tag {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700;
-      background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4);
-      color: #34d399; margin-left: 8px;
-    }
-    .token-sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
-    .token-countdown {
-      font-size: 18px; font-weight: 700; font-family: var(--font-mono); color: #60a5fa;
-    }
+    .metric-info { display: flex; flex-direction: column; }
+    .metric-label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; }
+    .metric-value { font-size: 22px; font-weight: 800; color: #fff; font-family: var(--font-mono); line-height: 1.1; margin: 2px 0; }
+    .metric-sub { font-size: 10px; color: var(--text-muted); }
+    .metric-icon { font-size: 22px; opacity: 0.8; }
 
-    .info-bar {
-      background: rgba(59, 130, 246, 0.08);
-      border: 1px solid rgba(59, 130, 246, 0.2);
-      border-radius: 12px;
-      padding: 14px 20px;
-      margin-bottom: 24px;
-      display: flex; flex-wrap: wrap; gap: 24px; font-size: 13px;
-    }
-    .info-item { display: flex; flex-direction: column; gap: 2px; }
-    .info-item .label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; }
-    .info-item .val { font-weight: 600; color: #fff; }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 20px;
-      backdrop-filter: blur(12px);
-    }
-    .card-title {
-      font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
-      color: var(--text-muted); margin-bottom: 8px;
-    }
-    .card-value {
-      font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: #fff;
-    }
-    .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-
-    .terminal-card {
-      background: #060910;
+    /* 4. Terminal Section (Fills remaining screen space) */
+    .terminal-wrapper {
+      flex: 1;
+      min-height: 0; /* Critical for flex scroll */
+      display: flex;
+      flex-direction: column;
+      background: #03060d;
       border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px;
+      border-radius: 10px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
       overflow: hidden;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
     }
     .terminal-header {
       background: rgba(255, 255, 255, 0.03);
-      padding: 14px 20px;
+      padding: 6px 12px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
     }
-    .terminal-dots { display: flex; gap: 6px; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .terminal-dots { display: flex; gap: 5px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
     .dot-red { background: #ff5f56; }
     .dot-yellow { background: #ffbd2e; }
     .dot-green { background: #27c93f; }
-    .terminal-title { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
-    .terminal-body {
-      font-family: var(--font-mono); font-size: 12px; padding: 16px;
-      height: 460px; overflow-y: auto; background: #050811; line-height: 1.6;
+    .terminal-title {
+      font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); font-weight: 600;
     }
-    .log-line { white-space: pre-wrap; word-break: break-all; margin-bottom: 4px; }
+    .terminal-meta {
+      font-size: 10px; font-family: var(--font-mono); color: #60a5fa;
+    }
+    .terminal-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.45;
+      padding: 8px 12px;
+      background: #020409;
+    }
+    .log-line { white-space: pre-wrap; word-break: break-all; margin-bottom: 3px; }
     .log-line.standby { color: #fde047; font-weight: 500; }
     .log-line.info { color: #93c5fd; }
     .log-line.skip { color: #fde047; }
     .log-line.success { color: #86efac; font-weight: 600; }
     .log-line.error { color: #fca5a5; font-weight: 600; }
 
+    /* Modal Overlay */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(8px);
       display: flex; align-items: center; justify-content: center;
       padding: 20px; z-index: 1000; opacity: 0; pointer-events: none;
-      transition: opacity 0.25s ease;
+      transition: opacity 0.2s ease;
     }
     .modal-overlay.open { opacity: 1; pointer-events: auto; }
     .modal-box {
-      background: #111827; border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 20px; width: 100%; max-width: 620px; padding: 28px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-      transform: scale(0.95); transition: transform 0.25s ease;
+      background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px; width: 100%; max-width: 540px; padding: 20px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+      transform: scale(0.96); transition: transform 0.2s ease;
     }
     .modal-overlay.open .modal-box { transform: scale(1); }
-    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #fff; }
-    .modal-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5; }
+    .modal-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .modal-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
     .token-textarea {
-      width: 100%; height: 130px; background: #060910;
-      border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px;
-      color: #fff; font-family: var(--font-mono); font-size: 12px; padding: 14px;
-      resize: vertical; outline: none; transition: border-color 0.2s;
+      width: 100%; height: 90px;
+      background: #060911; border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px; color: #fff; font-family: var(--font-mono);
+      font-size: 11px; padding: 10px; resize: none; margin-bottom: 12px;
     }
-    .token-textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
-    .token-preview {
-      margin-top: 14px; background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px;
-      padding: 12px; font-size: 12px; display: none;
-    }
-    .token-preview.show { display: block; }
-    .token-preview .prev-item { margin-bottom: 4px; }
-    .token-preview .prev-label { color: var(--text-muted); }
-    .modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+    .token-textarea:focus { outline: none; border-color: var(--primary); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
-    .helper-box {
-      background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2);
-      border-radius: 10px; padding: 12px; margin-top: 14px; font-size: 12px;
-    }
-    .helper-box code {
-      display: block; background: #060910; padding: 8px 10px;
-      border-radius: 6px; font-family: var(--font-mono); margin-top: 6px;
-      color: #93c5fd; word-break: break-all; user-select: all;
-    }
-
+    /* Toast */
     .toast {
-      position: fixed; bottom: 24px; right: 24px; padding: 12px 20px;
-      border-radius: 10px; font-size: 13px; font-weight: 600; color: #fff;
-      background: #2563eb; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-      transform: translateY(100px); opacity: 0;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 2000;
+      position: fixed; bottom: 20px; right: 20px;
+      background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff; padding: 8px 16px; border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      opacity: 0; transform: translateY(10px);
+      transition: all 0.25s ease;
+      z-index: 2000; pointer-events: none;
     }
-    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.show { opacity: 1; transform: translateY(0); }
   </style>
 </head>
 <body>
-  <div class="container">
+
+  <div class="app-viewport">
+    
+    <!-- 1. Header Bar -->
     <header>
       <div class="brand">
-        <div class="brand-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-          </svg>
-        </div>
+        <div class="brand-icon">⚡</div>
         <div class="brand-title">
-          <h1>Opportunistic Placement Automator</h1>
-          <p>24/7 AWS Autonomous Cloud Engine &bull; Host: 13.204.76.22</p>
+          <h1>Demand Automator <span id="statusBadge" class="status-badge stopped"><span class="pulse-dot"></span><span id="statusText">CHECKING...</span></span></h1>
+          <p>Nagarro Opportunistic Placement • Autonomous Cloud Runner</p>
         </div>
       </div>
-      <div class="header-actions">
-        <div id="statusBadge" class="status-badge online">
-          <span class="pulse-dot"></span>
-          <span id="statusText">CHECKING...</span>
+
+      <!-- Center Controls: Interval & Standby Override -->
+      <div class="header-center">
+        <!-- Standby Status & Override -->
+        <div class="standby-widget">
+          <span id="badgeStandby" class="standby-badge standby">🌙 Standby</span>
+          <button id="btnToggleStandby" class="btn-override force-run" onclick="toggleStandbyOverride()">
+            ⚡ Run Now (Override)
+          </button>
         </div>
+
+        <!-- Editable Interval -->
+        <div class="interval-box">
+          <label>Poll:</label>
+          <input type="number" id="inputInterval" class="interval-input" min="5" max="3600" value="30" title="Cycle interval in seconds">
+          <span style="color: var(--text-muted); font-size: 11px;">sec</span>
+          <button class="btn-save-interval" onclick="saveInterval()" title="Save & apply new interval">Save</button>
+        </div>
+      </div>
+
+      <!-- Right Actions -->
+      <div class="header-actions">
         <button id="btnPauseResume" class="btn btn-pause" onclick="togglePauseResume()">
-          <span id="pauseResumeIcon">⏸️</span>
-          <span id="pauseResumeText">Pause Automation</span>
+          <span id="iconPR">⏸️</span> <span id="textPR">Pause</span>
         </button>
-        <button class="btn btn-outline" onclick="restartEngine()">🔄 Restart</button>
-        <button class="btn btn-primary" onclick="openTokenModal()">🔑 Update Token</button>
+        <button class="btn btn-outline" onclick="restartEngine()" title="Restart engine process">
+          🔄 Restart
+        </button>
+        <button class="btn btn-token" onclick="openTokenModal()">
+          🔑 Token
+        </button>
       </div>
     </header>
 
-    <!-- LIVE TOKEN CARD -->
-    <div class="token-card" id="tokenCard">
-      <div class="token-left">
-        <div class="token-icon-wrapper">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
-          </svg>
-        </div>
-        <div>
-          <div class="token-title">
-            <span>Azure Bearer Token</span>
-            <span id="tokenPill" class="token-expiry-pill valid">Checking...</span>
-            <span id="autoRenewBadge" class="auto-renew-tag" style="display: none;">⚡ 24/7 Auto-Renew ON</span>
-          </div>
-          <div class="token-sub">
-            Authenticated Candidate: <strong id="tokenCandidateName" style="color: #fff;">Pankaj Kumar</strong> (<span id="tokenCandidateEmail">pankaj.kumar07@nagarro.com</span>)
-          </div>
-          <div class="token-sub" id="tokenExpiryDates">
-            Expires: <span id="tokenExpLocal">-</span>
-          </div>
-        </div>
+    <!-- 2. Compact Status Strip -->
+    <div class="status-strip">
+      <div class="strip-item">
+        <span class="strip-label">Candidate:</span>
+        <span id="stripCandidate" class="strip-val">Pankaj Kumar (pankaj.kumar07@nagarro.com)</span>
       </div>
-      <div>
-        <div class="token-sub" style="text-align: right; margin-bottom: 4px;">Time Remaining</div>
-        <div class="token-countdown" id="tokenCountdown">-</div>
-        <div style="text-align: right; margin-top: 8px;">
-          <button class="btn btn-primary" style="padding: 6px 14px; font-size: 12px;" onclick="openTokenModal()">
-            Renew / Update
-          </button>
-        </div>
+      <div class="strip-item">
+        <span class="strip-label">Token:</span>
+        <span id="stripTokenPill" class="token-pill valid">Valid: --:--</span>
+      </div>
+      <div class="strip-item">
+        <span class="strip-label">Entra ID:</span>
+        <span id="stripAutoRenew" class="strip-val" style="color: #34d399;">✅ 45m Auto-Renew Active</span>
+      </div>
+      <div class="strip-item" style="justify-content: flex-end;">
+        <span class="strip-label">Server:</span>
+        <span id="stripServer" class="strip-val" style="font-family: var(--font-mono); font-size: 11px;">RAM: -- MB | CPU: --% | Up: --</span>
       </div>
     </div>
 
-    <!-- Info Banner -->
-    <div class="info-bar">
-      <div class="info-item">
-        <span class="label">Target Portal</span>
-        <span class="val">Azure Production (https://opportunistic-placement.azurewebsites.net)</span>
+    <!-- 3. Compact Metrics Row -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-info">
+          <span class="metric-label">Scan Cycles</span>
+          <span id="valCycles" class="metric-value">#0</span>
+          <span id="valLastScan" class="metric-sub">Last: Never</span>
+        </div>
+        <div class="metric-icon">🔄</div>
       </div>
-      <div class="info-item">
-        <span class="label">Operating Schedule</span>
-        <span class="val">Mon – Fri: 8:00 AM – 8:00 PM IST (Weekends Excluded)</span>
+      <div class="metric-card">
+        <div class="metric-info">
+          <span class="metric-label">Demands Evaluated</span>
+          <span id="valEvaluated" class="metric-value">0</span>
+          <span class="metric-sub">Gurugram & WFA</span>
+        </div>
+        <div class="metric-icon">🔍</div>
       </div>
-      <div class="info-item">
-        <span class="label">Schedule Status</span>
-        <span class="val" id="valScheduleStatus">Checking...</span>
+      <div class="metric-card">
+        <div class="metric-info">
+          <span class="metric-label">Skipped Demands</span>
+          <span id="valSkipped" class="metric-value">0</span>
+          <span class="metric-sub">Python-Only / Applied</span>
+        </div>
+        <div class="metric-icon">⏭️</div>
       </div>
-      <div class="info-item">
-        <span class="label">Autonomous Renewal</span>
-        <span class="val" id="valAutoRenewStatus">Checking...</span>
-      </div>
-    </div>
-
-    <!-- Metrics Cards -->
-    <div class="grid">
-      <div class="card">
-        <div class="card-title">Completed Cycles</div>
-        <div class="card-value" id="valCycles">-</div>
-        <div class="card-sub">30s polling interval</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Demands Evaluated</div>
-        <div class="card-value" id="valEvaluated" style="color: #60a5fa;">-</div>
-        <div class="card-sub">Filtered across all pages</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Skipped (Rules)</div>
-        <div class="card-value" id="valSkipped" style="color: #fbbf24;">-</div>
-        <div class="card-sub">Already applied or Python-only</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Auto-Applied</div>
-        <div class="card-value" id="valApplied" style="color: #34d399;">-</div>
-        <div class="card-sub">Submitted with AI pitch & resume</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Daemon Uptime</div>
-        <div class="card-value" id="valUptime" style="font-size: 22px;">-</div>
-        <div class="card-sub" id="valMemory">-</div>
+      <div class="metric-card">
+        <div class="metric-info">
+          <span class="metric-label">Auto-Applied</span>
+          <span id="valApplied" class="metric-value" style="color: #34d399;">0</span>
+          <span class="metric-sub">Frontend / Full-stack</span>
+        </div>
+        <div class="metric-icon">🎯</div>
       </div>
     </div>
 
-    <!-- Terminal -->
-    <div class="terminal-card">
+    <!-- 4. Live Terminal Viewport (Fills remaining space) -->
+    <div class="terminal-wrapper">
       <div class="terminal-header">
         <div class="terminal-dots">
-          <span class="dot dot-red"></span>
-          <span class="dot dot-yellow"></span>
-          <span class="dot dot-green"></span>
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
         </div>
-        <div class="terminal-title">live-production-logs &bull; tail -f prod-automator-out.log</div>
-        <button class="btn btn-outline" style="padding: 4px 10px; font-size: 11px;" onclick="fetchData()">Refresh</button>
+        <div class="terminal-title">LIVE CLOUD TELEMETRY • AWS EC2 (Mumbai ap-south-1)</div>
+        <div id="terminalMeta" class="terminal-meta">PM2 PID: -- • Mon-Fri (8AM-8PM IST)</div>
       </div>
-      <div class="terminal-body" id="terminalLogs">
-        <div class="log-line info">Connecting to AWS background daemon...</div>
+      <div id="terminalLogs" class="terminal-body">
+        <div class="log-line info">Connecting to AWS cloud logs...</div>
       </div>
     </div>
+
   </div>
 
-  <!-- Token Update Modal -->
-  <div class="modal-overlay" id="tokenModal">
+  <!-- Token Modal -->
+  <div id="tokenModal" class="modal-overlay" onclick="if(event.target===this) closeTokenModal()">
     <div class="modal-box">
-      <div class="modal-title">⚡ Autonomous Token Activation</div>
-      <p class="modal-desc">
-        Paste your <strong>Refresh Token</strong> (or fresh Access Token). When you provide a Refresh Token, AWS will automatically renew tokens with Microsoft <strong>24/7 forever</strong> without requiring any human action.
-      </p>
-
-      <textarea id="tokenInput" class="token-textarea" placeholder="Paste your Refresh Token (starts with 0.A...) or Access Token here..." oninput="handleTokenInput()"></textarea>
-
-      <div class="token-preview" id="tokenPreview">
-        <div class="prev-item"><span class="prev-label">Token Type: </span><strong id="prevType" style="color: #34d399;">-</strong></div>
-        <div class="prev-item"><span class="prev-label">Candidate: </span><strong id="prevName" style="color: #fff;">-</strong></div>
-        <div class="prev-item"><span class="prev-label">Email: </span><span id="prevEmail" style="color: #93c5fd;">-</span></div>
-        <div class="prev-item"><span class="prev-label">Expiry / Validity: </span><span id="prevExp" style="color: #34d399;">-</span></div>
-      </div>
-
-      <div class="helper-box">
-        🚀 <strong>1-Click Command to copy your Refresh Token:</strong>
-        <p style="margin-top: 4px; color: var(--text-muted);">
-          In your <a href="https://opportunistic-placement.azurewebsites.net/demands" target="_blank" style="color: #60a5fa;">Portal</a> tab, open Console (<code>Cmd+Option+J</code>) and run:
-        </p>
-        <code onclick="copySnippet()" title="Click to copy snippet" style="cursor: pointer;">copy(Object.keys(sessionStorage).filter(k=>k.includes('refreshtoken')).map(k=>JSON.parse(sessionStorage[k]).secret)[0])</code>
-      </div>
-
-      <div class="modal-footer">
+      <h2 class="modal-title">🔑 Update Azure AD / Refresh Token</h2>
+      <p class="modal-desc">Paste your fresh Microsoft Entra ID Refresh Token (recommended for 24/7 autonomous renewal) or Bearer Access Token.</p>
+      <textarea id="tokenInput" class="token-textarea" placeholder="Paste token here (starts with '0.A...' or 'eyJ...')..."></textarea>
+      <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeTokenModal()">Cancel</button>
-        <button class="btn btn-primary" id="btnSaveToken" onclick="submitToken()">Save & Enable 24/7 Auto-Renew</button>
+        <button id="btnSaveToken" class="btn btn-token" onclick="submitToken()">Save & Enable Auto-Renew</button>
       </div>
     </div>
   </div>
 
-  <div class="toast" id="toastMessage">Notification</div>
+  <!-- Toast -->
+  <div id="toast" class="toast">Action notification</div>
 
   <script>
-    let currentStatus = 'online';
+    let currentStatus = 'unknown';
     let tokenExpTimestamp = 0;
     let countdownInterval = null;
+    let isOverrideActive = false;
+    let currentInterval = 30;
 
     function showToast(msg, isError = false) {
-      const toast = document.getElementById('toastMessage');
-      toast.innerText = msg;
-      toast.style.background = isError ? '#ef4444' : '#2563eb';
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 4000);
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.borderColor = isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
     }
 
     function formatUptime(seconds) {
       if (!seconds) return '0s';
-      const m = Math.floor(seconds / 60);
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
       const s = seconds % 60;
-      if (m < 60) return m + 'm ' + s + 's';
-      const h = Math.floor(m / 60);
-      return h + 'h ' + (m % 60) + 'm';
+      if (d > 0) return d + 'd ' + h + 'h';
+      if (h > 0) return h + 'h ' + m + 'm';
+      if (m > 0) return m + 'm ' + s + 's';
+      return s + 's';
     }
 
     function updateCountdown() {
-      if (!tokenExpTimestamp) return;
-      const nowSec = Math.floor(Date.now() / 1000);
-      const diff = tokenExpTimestamp - nowSec;
-      const cdEl = document.getElementById('tokenCountdown');
-      const pillEl = document.getElementById('tokenPill');
-
+      const el = document.getElementById('stripTokenPill');
+      if (!tokenExpTimestamp) {
+        el.innerText = 'No Token';
+        el.className = 'token-pill expired';
+        return;
+      }
+      const now = Math.floor(Date.now() / 1000);
+      const diff = tokenExpTimestamp - now;
       if (diff <= 0) {
-        cdEl.innerText = 'EXPIRED';
-        cdEl.style.color = '#ef4444';
-        pillEl.innerText = 'EXPIRED';
-        pillEl.className = 'token-expiry-pill expired';
+        el.innerText = 'Expired (Auto-renewing...)';
+        el.className = 'token-pill expired';
       } else {
-        const h = Math.floor(diff / 3600);
-        const m = Math.floor((diff % 3600) / 60);
+        const m = Math.floor(diff / 60);
         const s = diff % 60;
-        const timeStr = (h > 0 ? h + 'h ' : '') + String(m).padStart(2, '0') + 'm ' + String(s).padStart(2, '0') + 's';
-        cdEl.innerText = timeStr;
-
-        if (diff < 900) {
-          cdEl.style.color = '#f59e0b';
-          pillEl.innerText = 'Expiring Soon';
-          pillEl.className = 'token-expiry-pill warning';
-        } else {
-          cdEl.style.color = '#10b981';
-          pillEl.innerText = 'Active & Valid';
-          pillEl.className = 'token-expiry-pill valid';
-        }
+        el.innerText = 'Valid: ' + m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+        if (diff > 900) el.className = 'token-pill valid';
+        else if (diff > 300) el.className = 'token-pill warning';
+        else el.className = 'token-pill expired';
       }
     }
 
@@ -633,52 +662,58 @@ const HTML_CONTENT = `<!DOCTYPE html>
         const res = await fetch('/api/status');
         const data = await res.json();
 
-        // PM2
+        // PM2 Status
         if (data.pm2) {
           currentStatus = data.pm2.status;
-          const statusBadge = document.getElementById('statusBadge');
-          const statusText = document.getElementById('statusText');
+          const badge = document.getElementById('statusBadge');
+          const text = document.getElementById('statusText');
           const btnPR = document.getElementById('btnPauseResume');
-          const iconPR = document.getElementById('pauseResumeIcon');
-          const textPR = document.getElementById('pauseResumeText');
+          const iconPR = document.getElementById('iconPR');
+          const textPR = document.getElementById('textPR');
 
-          if (data.pm2.status === 'online') {
-            statusBadge.className = 'status-badge online';
-            statusText.innerText = 'DAEMON ACTIVE (30s)';
+          if (currentStatus === 'online') {
+            badge.className = 'status-badge online';
+            text.innerText = 'ONLINE';
             btnPR.className = 'btn btn-pause';
             iconPR.innerText = '⏸️';
-            textPR.innerText = 'Pause Automation';
+            textPR.innerText = 'Pause';
           } else {
-            statusBadge.className = 'status-badge stopped';
-            statusText.innerText = 'AUTOMATION PAUSED';
+            badge.className = 'status-badge stopped';
+            text.innerText = 'PAUSED';
             btnPR.className = 'btn btn-resume';
             iconPR.innerText = '▶️';
-            textPR.innerText = 'Resume Automation';
+            textPR.innerText = 'Resume';
           }
 
-          document.getElementById('valUptime').innerText = formatUptime(data.pm2.uptime);
-          document.getElementById('valMemory').innerText = 'RAM: ' + data.pm2.memoryMb + ' MB | CPU: ' + data.pm2.cpu + '%';
+          document.getElementById('stripServer').innerText = 'RAM: ' + data.pm2.memoryMb + ' MB | CPU: ' + data.pm2.cpu + '% | Up: ' + formatUptime(data.pm2.uptime);
+          document.getElementById('terminalMeta').innerText = 'PM2: ' + currentStatus.toUpperCase() + ' (RAM: ' + data.pm2.memoryMb + 'MB) • Interval: ' + (data.runtimeConfig?.pollIntervalSeconds || 30) + 's';
         }
 
-        // Auto Renew status
-        const autoRenewBadge = document.getElementById('autoRenewBadge');
-        const autoRenewStatus = document.getElementById('valAutoRenewStatus');
-        if (data.hasRefreshToken) {
-          autoRenewBadge.style.display = 'inline-flex';
-          autoRenewStatus.innerHTML = '<span style=\"color: #34d399;\">✅ Enabled (Silent 45m Azure AD refresh)</span>';
-        } else {
-          autoRenewBadge.style.display = 'none';
-          autoRenewStatus.innerHTML = '<span style=\"color: #f59e0b;\">⚠️ Manual (Paste Refresh Token to activate)</span>';
+        // Runtime Config: Interval & Standby Override
+        if (data.runtimeConfig) {
+          isOverrideActive = Boolean(data.runtimeConfig.standbyOverride);
+          currentInterval = data.runtimeConfig.pollIntervalSeconds || 30;
+
+          const inputInt = document.getElementById('inputInterval');
+          if (document.activeElement !== inputInt) {
+            inputInt.value = currentInterval;
+          }
+
+          updateStandbyUI();
         }
 
         // Token Info
         if (data.token) {
           tokenExpTimestamp = data.token.exp;
-          document.getElementById('tokenCandidateName').innerText = data.token.name;
-          document.getElementById('tokenCandidateEmail').innerText = data.token.email;
-          const expDate = new Date(data.token.exp * 1000);
-          document.getElementById('tokenExpLocal').innerText = expDate.toLocaleString();
+          document.getElementById('stripCandidate').innerText = data.token.name + ' (' + data.token.email + ')';
           updateCountdown();
+        }
+
+        // Auto Renew
+        if (data.hasRefreshToken) {
+          document.getElementById('stripAutoRenew').innerHTML = '<span style="color: #34d399;">✅ 45m Auto-Renew Active</span>';
+        } else {
+          document.getElementById('stripAutoRenew').innerHTML = '<span style="color: #f59e0b;">⚠️ Manual Token Only</span>';
         }
 
         // Stats
@@ -687,26 +722,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
           document.getElementById('valEvaluated').innerText = (data.stats.cycles * 2);
           document.getElementById('valSkipped').innerText = (data.stats.skippedAlreadyApplied + data.stats.skippedPythonOnly);
           document.getElementById('valApplied').innerText = data.stats.applied;
-        }
-
-        // Schedule status
-        const schedEl = document.getElementById('valScheduleStatus');
-        if (schedEl) {
-          const istStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-          const istDate = new Date(istStr);
-          const day = istDate.getDay();
-          const hour = istDate.getHours();
-          const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-          const currentDayName = dayNames[day];
-
-          if (day === 0 || day === 6) {
-            schedEl.innerHTML = '<span style="color: #fbbf24; font-weight: 600;">🏖️ Weekend Standby (' + currentDayName + ') - Resumes Monday 8:00 AM IST</span>';
-          } else if (hour >= 8 && hour < 20) {
-            schedEl.innerHTML = '<span style="color: #34d399; font-weight: 700;">🟢 Active Window (Mon–Fri: 8:00 AM – 8:00 PM IST)</span>';
-          } else {
-            let hoursUntil8 = (8 - hour + 24) % 24;
-            schedEl.innerHTML = '<span style="color: #fbbf24; font-weight: 600;">🌙 Standby (Resumes at 8:00 AM IST in ~' + hoursUntil8 + 'h)</span>';
-          }
+          document.getElementById('valLastScan').innerText = 'Last: ' + data.stats.lastScan;
         }
 
         // Logs
@@ -716,14 +732,94 @@ const HTML_CONTENT = `<!DOCTYPE html>
             let cls = 'info';
             if (line.includes('[STANDBY]')) cls = 'standby';
             else if (line.includes('[SKIP]')) cls = 'skip';
-            else if (line.includes('[SUCCESS]') || line.includes('APPLIED to') || line.includes('auto-renewed')) cls = 'success';
+            else if (line.includes('APPLIED to')) cls = 'success';
+            else if (line.includes('[SUCCESS]') || line.includes('auto-renewed')) cls = 'success';
             else if (line.includes('[ERROR]') || line.includes('Error')) cls = 'error';
-            return '<div class=\"log-line ' + cls + '\">' + escapeHtml(line) + '</div>';
+            return '<div class="log-line ' + cls + '">' + escapeHtml(line) + '</div>';
           }).join('');
           term.scrollTop = term.scrollHeight;
         }
+
       } catch (e) {
         console.error('Fetch error:', e);
+      }
+    }
+
+    function updateStandbyUI() {
+      const badge = document.getElementById('badgeStandby');
+      const btn = document.getElementById('btnToggleStandby');
+
+      const istStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+      const istDate = new Date(istStr);
+      const day = istDate.getDay();
+      const hour = istDate.getHours();
+      const isNormalWorkingHours = (day >= 1 && day <= 5 && hour >= 8 && hour < 20);
+
+      if (isOverrideActive) {
+        badge.className = 'standby-badge override';
+        badge.innerText = '⚡ Override Active';
+        btn.className = 'btn-override restore-standby';
+        btn.innerText = '🌙 Re-enable Auto Standby';
+        btn.title = 'Return to scheduled standby (Mon-Fri 8AM-8PM IST)';
+      } else if (!isNormalWorkingHours) {
+        badge.className = 'standby-badge standby';
+        badge.innerText = (day === 0 || day === 6) ? '🏖️ Weekend Standby' : '🌙 Night Standby (8AM-8PM)';
+        btn.className = 'btn-override force-run';
+        btn.innerText = '⚡ Run Now (Override)';
+        btn.title = 'Bypass schedule and run automation immediately right now';
+      } else {
+        badge.className = 'standby-badge active';
+        badge.innerText = '🟢 Active Window (8AM-8PM)';
+        btn.className = 'btn-override restore-standby';
+        btn.innerText = '🌙 Force Standby Sleep';
+        btn.title = 'Put engine into standby sleep mode';
+      }
+    }
+
+    async function toggleStandbyOverride() {
+      const newOverride = !isOverrideActive;
+      try {
+        const res = await fetch('/api/config/standby-override', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ standbyOverride: newOverride })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(newOverride ? '⚡ Standby overridden! Engine running actively now.' : '🌙 Returned to scheduled standby rules.');
+          fetchData();
+        } else {
+          showToast('Failed to toggle standby: ' + (data.error || 'Unknown error'), true);
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, true);
+      }
+    }
+
+    async function saveInterval() {
+      const input = document.getElementById('inputInterval');
+      const sec = parseInt(input.value, 10);
+      if (isNaN(sec) || sec < 5 || sec > 3600) {
+        alert('Please enter a valid interval between 5 and 3600 seconds.');
+        input.value = currentInterval;
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/config/interval', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ intervalSeconds: sec })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('⏱️ Poll interval updated to ' + sec + 's! Engine restarted.');
+          fetchData();
+        } else {
+          showToast('Failed: ' + (data.error || 'Could not update interval'), true);
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, true);
       }
     }
 
@@ -757,40 +853,6 @@ const HTML_CONTENT = `<!DOCTYPE html>
     function closeTokenModal() {
       document.getElementById('tokenModal').classList.remove('open');
       document.getElementById('tokenInput').value = '';
-      document.getElementById('tokenPreview').classList.remove('show');
-    }
-
-    function handleTokenInput() {
-      const val = document.getElementById('tokenInput').value.trim();
-      const prev = document.getElementById('tokenPreview');
-      if (!val) {
-        prev.classList.remove('show');
-        return;
-      }
-
-      if (val.startsWith('0.A') || val.length > 500 && !val.includes('.')) {
-        document.getElementById('prevType').innerText = '⚡ Refresh Token (Enables 24/7 Autonomous Renewal)';
-        document.getElementById('prevName').innerText = 'Pankaj Kumar';
-        document.getElementById('prevEmail').innerText = 'pankaj.kumar07@nagarro.com';
-        document.getElementById('prevExp').innerText = 'Up to 90 Days Rolling Auto-Renew';
-        prev.classList.add('show');
-        return;
-      }
-
-      try {
-        const parts = val.replace(/^Bearer\s+/i, '').split('.');
-        if (parts.length >= 2) {
-          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-          document.getElementById('prevType').innerText = 'Access Token (60-minute duration)';
-          document.getElementById('prevName').innerText = payload.name || payload.given_name || 'Nagarro Candidate';
-          document.getElementById('prevEmail').innerText = payload.upn || payload.unique_name || payload.email || '-';
-          const expDate = new Date(payload.exp * 1000);
-          document.getElementById('prevExp').innerText = expDate.toLocaleString();
-          prev.classList.add('show');
-          return;
-        }
-      } catch (e) {}
-      prev.classList.remove('show');
     }
 
     async function submitToken() {
@@ -821,14 +883,8 @@ const HTML_CONTENT = `<!DOCTYPE html>
         showToast('Error: ' + e.message, true);
       } finally {
         btn.disabled = false;
-        btn.innerText = 'Save & Enable 24/7 Auto-Renew';
+        btn.innerText = 'Save & Enable Auto-Renew';
       }
-    }
-
-    function copySnippet() {
-      const snippet = "copy(Object.keys(sessionStorage).filter(k=>k.includes('refreshtoken')).map(k=>JSON.parse(sessionStorage[k]).secret)[0])";
-      navigator.clipboard.writeText(snippet);
-      showToast('📋 Snippet copied! Run in portal Console, then paste token here.');
     }
 
     function escapeHtml(text) {
@@ -865,64 +921,73 @@ const server = http.createServer(async (req, res) => {
     const hasRefresh = hasRefreshToken();
     const logs = getLogLines(LOG_FILE, 70);
     const stats = parseStatsFromLogs(logs);
+    const runtimeConfig = getRuntimeConfig();
 
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*'
     });
-    return res.end(JSON.stringify({ pm2, token, hasRefreshToken: hasRefresh, stats, logs }));
+    return res.end(JSON.stringify({ pm2, token, hasRefreshToken: hasRefresh, stats, logs, runtimeConfig }));
+  }
+
+  // POST /api/config/interval
+  if (pathname === '/api/config/interval' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const sec = parseInt(body.intervalSeconds, 10);
+    if (isNaN(sec) || sec < 5 || sec > 3600) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Interval must be between 5 and 3600 seconds' }));
+    }
+    saveRuntimeConfig({ pollIntervalSeconds: sec });
+    exec('pm2 restart prod-automator', (err) => {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: !err, pollIntervalSeconds: sec }));
+    });
+    return;
+  }
+
+  // POST /api/config/standby-override
+  if (pathname === '/api/config/standby-override' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const override = Boolean(body.standbyOverride);
+    saveRuntimeConfig({ standbyOverride: override });
+    exec('pm2 restart prod-automator', (err) => {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: !err, standbyOverride: override }));
+    });
+    return;
   }
 
   // POST /api/token/update
   if (pathname === '/api/token/update' && method === 'POST') {
     const body = await parseJsonBody(req);
-    const rawToken = (body.token || '').replace(/^Bearer\s+/i, '').replace(/^['"]|['"]$/g, '').trim();
-
+    const rawToken = (body.token || '').trim();
     if (!rawToken) {
-      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      return res.end(JSON.stringify({ success: false, error: 'Empty token provided' }));
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Token is required' }));
     }
 
-    // CASE 1: User pasted a REFRESH TOKEN (starts with 0.A or doesn't have 3 dot-separated JWT parts)
-    if (rawToken.startsWith('0.A') || !rawToken.includes('.') || rawToken.length > 500 && rawToken.split('.').length !== 3) {
-      // Exchange refresh token with Azure AD
-      const exchangeResult = await refreshAccessToken(rawToken);
-      if (!exchangeResult.success) {
-        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        return res.end(JSON.stringify({
-          success: false,
-          error: `Azure AD rejected refresh token: ${exchangeResult.error}`
-        }));
-      }
-
-      // Restart prod-automator to reload immediately
-      exec('pm2 restart prod-automator', () => {
+    if (rawToken.startsWith('0.A') || (rawToken.length > 500 && !rawToken.includes('.'))) {
+      fs.writeFileSync(REFRESH_TOKEN_FILE, rawToken, { mode: 0o600 });
+      exec('pm2 restart prod-automator', (err) => {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         return res.end(JSON.stringify({
-          success: true,
+          success: !err,
           isRefreshToken: true,
-          message: '⚡ Autonomous 24/7 Auto-Renew Activated! Azure AD issued fresh token.',
-          token: parseJwt(exchangeResult.accessToken)
+          message: 'Refresh Token saved! 24/7 autonomous token auto-renew is active.'
         }));
       });
       return;
     }
 
-    // CASE 2: User pasted an ACCESS TOKEN (JWT)
+    fs.writeFileSync(TOKEN_FILE, rawToken, { mode: 0o600 });
     const parsed = parseJwt(rawToken);
-    if (!parsed || !parsed.isValid) {
-      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      return res.end(JSON.stringify({ success: false, error: 'Invalid token format' }));
-    }
-
-    fs.writeFileSync(TOKEN_FILE, rawToken, 'utf8');
-
-    exec('pm2 restart prod-automator', () => {
+    exec('pm2 restart prod-automator', (err) => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       return res.end(JSON.stringify({
-        success: true,
+        success: !err,
         isRefreshToken: false,
-        message: 'Access Token updated (expires in 60m). Paste your Refresh Token for 24/7 auto-renew!',
+        message: 'Access Token updated. Paste your Refresh Token for 24/7 auto-renew!',
         token: parsed
       }));
     });
@@ -961,6 +1026,7 @@ const server = http.createServer(async (req, res) => {
   res.end(HTML_CONTENT);
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Live Interactive Dashboard running privately on http://127.0.0.1:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`🔒 Private Dashboard running strictly on http://${HOST}:${PORT}`);
+  console.log(`   (Public access blocked; use open-dashboard.sh for SSH tunnel)`);
 });
