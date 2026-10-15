@@ -65,8 +65,8 @@ export class DemandAutomationEngine {
 
   isWithinOperatingHours() {
     const runtime = getRuntimeConfig();
-    if (runtime.standbyOverride === true) {
-      return true; // Manual override: run immediately anytime
+    if (runtime.autoStandby === false || runtime.standbyOverride === true) {
+      return true; // Auto-standby is DISABLED -> run 24/7 continuously!
     }
     if (!CONFIG.schedule || !CONFIG.schedule.enabled) return true;
     try {
@@ -175,8 +175,9 @@ export class DemandAutomationEngine {
     const baseSec = runtime.pollIntervalSeconds || Math.round(this.intervalMs / 1000) || 30;
     this.intervalMs = baseSec * 1000;
 
-    const scheduleInfo = runtime.standbyOverride === true
-      ? " | ⚡ Standby Override: ACTIVE"
+    const isAutoStandbyDisabled = runtime.autoStandby === false || runtime.standbyOverride === true;
+    const scheduleInfo = isAutoStandbyDisabled
+      ? " | ⚡ Auto-Standby: DISABLED (24/7 Mode)"
       : (CONFIG.schedule?.enabled
         ? ` | Schedule: Mon-Fri, ${CONFIG.schedule.startHour}:00 AM - ${CONFIG.schedule.endHour - 12}:00 PM IST (Weekends Excluded)`
         : "");
@@ -250,7 +251,7 @@ export class DemandAutomationEngine {
 
   async tick() {
     const runtime = getRuntimeConfig();
-    const isOverride = runtime.standbyOverride === true;
+    const isAutoStandbyDisabled = runtime.autoStandby === false || runtime.standbyOverride === true;
 
     // Check Monday - Friday (8:00 AM - 8:00 PM IST) Operational Window
     if (!this.isWithinOperatingHours()) {
@@ -260,10 +261,10 @@ export class DemandAutomationEngine {
       }
       return;
     }
-    if (isOverride && !this.overrideLogged) {
-      this.log("INFO", "⚡ Standby override ACTIVE: Running automation outside normal schedule as requested.");
+    if (isAutoStandbyDisabled && !this.overrideLogged) {
+      this.log("INFO", "⚡ Auto-Standby is DISABLED: Running 24/7 continuously without schedule restrictions.");
       this.overrideLogged = true;
-    } else if (!isOverride) {
+    } else if (!isAutoStandbyDisabled) {
       this.overrideLogged = false;
     }
     this.lastStandbyLogged = 0;

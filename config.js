@@ -9,17 +9,29 @@ const RUNTIME_CONFIG_FILE = path.join(__dirname, 'runtime-config.json');
 export function getRuntimeConfig() {
   try {
     if (fs.existsSync(RUNTIME_CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(RUNTIME_CONFIG_FILE, 'utf8'));
+      const data = JSON.parse(fs.readFileSync(RUNTIME_CONFIG_FILE, "utf8"));
+      const autoStandby = data.autoStandby !== undefined ? Boolean(data.autoStandby) : !Boolean(data.standbyOverride);
+      return {
+        pollIntervalSeconds: data.pollIntervalSeconds || 30,
+        autoStandby: autoStandby,
+        standbyOverride: !autoStandby,
+        ...data
+      };
     }
   } catch (e) {}
-  return { pollIntervalSeconds: 30, standbyOverride: false };
+  return { pollIntervalSeconds: 30, autoStandby: true, standbyOverride: false };
 }
 
 export function saveRuntimeConfig(newConfig) {
   try {
     const current = getRuntimeConfig();
     const updated = { ...current, ...newConfig };
-    fs.writeFileSync(RUNTIME_CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
+    if (newConfig.autoStandby !== undefined && newConfig.standbyOverride === undefined) {
+      updated.standbyOverride = !Boolean(newConfig.autoStandby);
+    } else if (newConfig.standbyOverride !== undefined && newConfig.autoStandby === undefined) {
+      updated.autoStandby = !Boolean(newConfig.standbyOverride);
+    }
+    fs.writeFileSync(RUNTIME_CONFIG_FILE, JSON.stringify(updated, null, 2), "utf8");
     return updated;
   } catch (e) {
     console.error("Failed to save runtime config:", e);

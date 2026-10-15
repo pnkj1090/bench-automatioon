@@ -292,6 +292,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
     .standby-badge.standby { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
     .standby-badge.override { background: rgba(139, 92, 246, 0.2); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.4); }
     .standby-badge.active { background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .standby-badge.disabled-247 { background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45); box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
 
     .btn-override {
       font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; transition: all 0.15s;
@@ -615,11 +616,12 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
       <!-- Center Controls: Interval & Standby Override -->
       <div class="header-center">
-        <!-- Standby Status & Override -->
-        <div class="standby-widget">
+        <!-- Standby Status & Toggle -->
+        <div class="standby-widget" title="Auto-Standby: Automatically sleeps outside Mon-Fri 8AM-8PM IST unless disabled">
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Standby:</span>
           <span id="badgeStandby" class="standby-badge standby">🌙 Standby</span>
           <button id="btnToggleStandby" class="btn-override force-run" onclick="toggleStandbyOverride()">
-            ⚡ Run Now (Override)
+            ⚡ Disable (Run 24/7)
           </button>
         </div>
 
@@ -774,6 +776,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
     let currentStatus = 'unknown';
     let tokenExpTimestamp = 0;
     let countdownInterval = null;
+    let isAutoStandby = true;
     let isOverrideActive = false;
     let currentInterval = 30;
     let previousAppliedCount = 0;
@@ -978,9 +981,12 @@ const HTML_CONTENT = `<!DOCTYPE html>
           else latEl.className = 'latency-pill slow';
         }
 
-        // Runtime Config: Interval & Standby Override
+        // Runtime Config: Interval & Auto-Standby
         if (data.runtimeConfig) {
-          isOverrideActive = Boolean(data.runtimeConfig.standbyOverride);
+          isAutoStandby = data.runtimeConfig.autoStandby !== undefined
+            ? Boolean(data.runtimeConfig.autoStandby)
+            : !Boolean(data.runtimeConfig.standbyOverride);
+          isOverrideActive = !isAutoStandby;
           currentInterval = data.runtimeConfig.pollIntervalSeconds || 30;
 
           const inputInt = document.getElementById('inputInterval');
@@ -1049,8 +1055,8 @@ const HTML_CONTENT = `<!DOCTYPE html>
     }
 
     function updateStandbyUI() {
-      const badge = document.getElementById('badgeStandby');
-      const btn = document.getElementById('btnToggleStandby');
+      const badge = document.getElementById("badgeStandby");
+      const btn = document.getElementById("btnToggleStandby");
 
       const istStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
       const istDate = new Date(istStr);
@@ -1058,44 +1064,47 @@ const HTML_CONTENT = `<!DOCTYPE html>
       const hour = istDate.getHours();
       const isNormalWorkingHours = (day >= 1 && day <= 5 && hour >= 8 && hour < 20);
 
-      if (isOverrideActive) {
-        badge.className = 'standby-badge override';
-        badge.innerText = '⚡ Override Active';
-        btn.className = 'btn-override restore-standby';
-        btn.innerText = '🌙 Re-enable Auto Standby';
-        btn.title = 'Return to scheduled standby (Mon-Fri 8AM-8PM IST)';
+      if (!isAutoStandby) {
+        badge.className = "standby-badge disabled-247";
+        badge.innerText = "⚡ DISABLED (24/7)";
+        btn.className = "btn-override restore-standby";
+        btn.innerText = "🌙 Enable (8AM-8PM)";
+        btn.title = "Auto-standby is OFF. Automation runs continuously 24/7. Click to re-enable schedule.";
       } else if (!isNormalWorkingHours) {
-        badge.className = 'standby-badge standby';
-        badge.innerText = (day === 0 || day === 6) ? '🏖️ Weekend Standby' : '🌙 Night Standby (8AM-8PM)';
-        btn.className = 'btn-override force-run';
-        btn.innerText = '⚡ Run Now (Override)';
-        btn.title = 'Bypass schedule and run automation immediately right now';
+        badge.className = "standby-badge standby";
+        badge.innerText = (day === 0 || day === 6) ? "🏖️ Standby (Weekend)" : "🌙 Standby (Sleeping)";
+        btn.className = "btn-override force-run";
+        btn.innerText = "⚡ Disable (Run 24/7)";
+        btn.title = "Auto-standby is ON (Engine sleeping). Click to disable auto-standby and run right now 24/7.";
       } else {
-        badge.className = 'standby-badge active';
-        badge.innerText = '🟢 Active Window (8AM-8PM)';
-        btn.className = 'btn-override restore-standby';
-        btn.innerText = '🌙 Force Standby Sleep';
-        btn.title = 'Put engine into standby sleep mode';
+        badge.className = "standby-badge active";
+        badge.innerText = "🟢 Active (8AM-8PM)";
+        btn.className = "btn-override force-run";
+        btn.innerText = "⚡ Disable (Run 24/7)";
+        btn.title = "Auto-standby is ON (Operating window). Click to disable auto-standby and run 24/7 non-stop.";
       }
     }
 
     async function toggleStandbyOverride() {
-      const newOverride = !isOverrideActive;
+      const newAutoStandby = !isAutoStandby;
       try {
-        const res = await fetch('/api/config/standby-override', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ standbyOverride: newOverride })
+        const res = await fetch("/api/config/autostandby", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ autoStandby: newAutoStandby, standbyOverride: !newAutoStandby })
         });
         const data = await res.json();
         if (data.success) {
-          showToast(newOverride ? '⚡ Standby overridden! Engine running actively now.' : '🌙 Returned to scheduled standby rules.');
+          isAutoStandby = newAutoStandby;
+          isOverrideActive = !newAutoStandby;
+          updateStandbyUI();
+          showToast(newAutoStandby ? "🌙 Auto-Standby ENABLED: Following Mon-Fri 8AM-8PM schedule." : "⚡ Auto-Standby DISABLED: Engine will now run 24/7 continuously!");
           fetchData();
         } else {
-          showToast('Failed to toggle standby: ' + (data.error || 'Unknown error'), true);
+          showToast("Failed to toggle standby: " + (data.error || "Unknown error"), true);
         }
       } catch (e) {
-        showToast('Error: ' + e.message, true);
+        showToast("Error: " + e.message, true);
       }
     }
 
@@ -1252,14 +1261,33 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // POST /api/config/standby-override
-  if (pathname === '/api/config/standby-override' && method === 'POST') {
+  // POST /api/config/autostandby or /api/config/standby-override
+  if ((pathname === '/api/config/autostandby' || pathname === '/api/config/standby-override') && method === 'POST') {
     const body = await parseJsonBody(req);
-    const override = Boolean(body.standbyOverride);
-    saveRuntimeConfig({ standbyOverride: override });
+    let autoStandby;
+    if (body.autoStandby !== undefined) {
+      autoStandby = Boolean(body.autoStandby);
+    } else if (body.enabled !== undefined) {
+      autoStandby = Boolean(body.enabled);
+    } else if (body.standbyOverride !== undefined) {
+      autoStandby = !Boolean(body.standbyOverride);
+    } else {
+      autoStandby = true;
+    }
+
+    const updated = saveRuntimeConfig({
+      autoStandby: autoStandby,
+      standbyOverride: !autoStandby
+    });
+
     exec('pm2 restart prod-automator', (err) => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      return res.end(JSON.stringify({ success: !err, standbyOverride: override }));
+      return res.end(JSON.stringify({
+        success: !err,
+        autoStandby: autoStandby,
+        standbyOverride: !autoStandby,
+        runtimeConfig: updated
+      }));
     });
     return;
   }

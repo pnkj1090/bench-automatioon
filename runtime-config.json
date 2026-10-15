@@ -1,4 +1,5 @@
 {
   "pollIntervalSeconds": 30,
-  "standbyOverride": false
+  "autoStandby": false,
+  "standbyOverride": true
 }
