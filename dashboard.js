@@ -627,7 +627,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         <div class="interval-box">
           <label>Poll:</label>
           <input type="number" id="inputInterval" class="interval-input" min="5" max="3600" value="30" title="Cycle interval in seconds">
-          <span style="color: var(--text-muted); font-size: 11px;">sec</span>
+          <span style="color: var(--text-muted); font-size: 11px;">s (±3s jitter)</span>
           <button class="btn-save-interval" onclick="saveInterval()" title="Save & apply new interval">Save</button>
         </div>
       </div>
@@ -966,7 +966,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
           }
 
           document.getElementById('stripServer').innerText = 'RAM: ' + data.pm2.memoryMb + ' MB | CPU: ' + data.pm2.cpu + '% | Up: ' + formatUptime(data.pm2.uptime);
-          document.getElementById('terminalMeta').innerText = 'PM2: ' + currentStatus.toUpperCase() + ' (RAM: ' + data.pm2.memoryMb + 'MB) • Interval: ' + (data.runtimeConfig?.pollIntervalSeconds || 30) + 's';
+          document.getElementById('terminalMeta').innerText = 'PM2: ' + currentStatus.toUpperCase() + ' (RAM: ' + data.pm2.memoryMb + 'MB) • Interval: ' + (data.runtimeConfig?.pollIntervalSeconds || 30) + 's (±3s jitter)';
         }
 
         // Latency
@@ -1116,7 +1116,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         });
         const data = await res.json();
         if (data.success) {
-          showToast('⏱️ Poll interval updated to ' + sec + 's! Engine restarted.');
+          showToast('⏱️ Poll interval calibrated to ' + sec + 's (±3s human jitter)! Engine restarted.');
           fetchData();
         } else {
           showToast('Failed: ' + (data.error || 'Could not update interval'), true);

@@ -13,6 +13,28 @@ const __dirname = path.dirname(__filename);
 const TOKEN_FILE = path.join(__dirname, 'token.txt');
 const REFRESH_TOKEN_FILE = path.join(__dirname, 'refresh-token.txt');
 
+const APPLIED_FILE = path.join(__dirname, "applied-demands.json");
+
+function getAppliedHistory() {
+  try {
+    if (fs.existsSync(APPLIED_FILE)) {
+      return JSON.parse(fs.readFileSync(APPLIED_FILE, "utf8"));
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveAppliedRecord(record) {
+  try {
+    const list = getAppliedHistory();
+    list.unshift(record);
+    fs.writeFileSync(APPLIED_FILE, JSON.stringify(list, null, 2), "utf8");
+  } catch (e) {
+    console.error("Failed to save applied record:", e);
+  }
+}
+
+
 export class DemandAutomationEngine {
   constructor(options = {}) {
     this.target = options.target || "mock";
@@ -125,19 +147,50 @@ export class DemandAutomationEngine {
     return entry;
   }
 
+  scheduleNextTick() {
+    if (!this.isRunning) return;
+    const runtime = getRuntimeConfig();
+    const baseSec = runtime.pollIntervalSeconds || Math.round(this.intervalMs / 1000) || 30;
+
+    // Human jitter: between -3.0s and +3.0s (proportional if baseSec < 15s)
+    const maxJitter = Math.min(3, Math.max(1, Math.round(baseSec * 0.15)));
+    const jitterSec = Number(((Math.random() * (maxJitter * 2)) - maxJitter).toFixed(1));
+    const nextIntervalMs = Math.max(5000, Math.round((baseSec + jitterSec) * 1000));
+
+    this.timer = setTimeout(async () => {
+      try {
+        await this.tick();
+      } catch (err) {
+        this.log("ERROR", `Error in cycle tick: ${err.message}`);
+      } finally {
+        this.scheduleNextTick();
+      }
+    }, nextIntervalMs);
+  }
+
   start() {
     if (this.isRunning) return;
     this.isRunning = true;
-    const scheduleInfo = CONFIG.schedule?.enabled
-      ? ` | Schedule: Mon-Fri, ${CONFIG.schedule.startHour}:00 AM - ${CONFIG.schedule.endHour - 12}:00 PM IST (Weekends Excluded)`
-      : "";
-    this.log("INFO", `Starting Demand Automation Engine targeting [${this.target.toUpperCase()}] at ${this.baseUrl} (Interval: ${this.intervalMs / 1000}s${scheduleInfo})`);
-    
-    this.tick();
+    const runtime = getRuntimeConfig();
+    const baseSec = runtime.pollIntervalSeconds || Math.round(this.intervalMs / 1000) || 30;
+    this.intervalMs = baseSec * 1000;
 
-    this.timer = setInterval(() => {
-      this.tick();
-    }, this.intervalMs);
+    const scheduleInfo = runtime.standbyOverride === true
+      ? " | ⚡ Standby Override: ACTIVE"
+      : (CONFIG.schedule?.enabled
+        ? ` | Schedule: Mon-Fri, ${CONFIG.schedule.startHour}:00 AM - ${CONFIG.schedule.endHour - 12}:00 PM IST (Weekends Excluded)`
+        : "");
+    this.log("INFO", `Starting Demand Automation Engine targeting [${this.target.toUpperCase()}] at ${this.baseUrl} (Base: ${baseSec}s with ±3s human jitter${scheduleInfo})`);
+    
+    (async () => {
+      try {
+        await this.tick();
+      } catch (err) {
+        this.log("ERROR", `Initial tick failed: ${err.message}`);
+      } finally {
+        this.scheduleNextTick();
+      }
+    })();
 
     // Schedule autonomous token renewal every 45 minutes
     this.renewTimer = setInterval(async () => {
@@ -157,7 +210,7 @@ export class DemandAutomationEngine {
     if (!this.isRunning) return;
     this.isRunning = false;
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
     }
     if (this.renewTimer) {
