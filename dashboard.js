@@ -135,39 +135,53 @@ const HTML_CONTENT = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Demand Automator • Mission Control</title>
+  <title>NEXUS • QUANTUM DEMAND AUTOMATOR</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #07090e;
-      --card-bg: rgba(15, 23, 42, 0.7);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --primary: #3b82f6;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --purple: #8b5cf6;
-      --text-main: #f3f4f6;
-      --text-muted: #94a3b8;
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --bg: #030712;
+      --panel: rgba(8, 14, 28, 0.75);
+      --panel-border: rgba(0, 243, 255, 0.18);
+      --panel-glow: rgba(0, 243, 255, 0.08);
+      --cyan: #00f3ff;
+      --cyan-dim: rgba(0, 243, 255, 0.15);
+      --green: #00ff9f;
+      --green-dim: rgba(0, 255, 159, 0.15);
+      --amber: #ffb703;
+      --amber-dim: rgba(255, 183, 3, 0.15);
+      --purple: #b5179e;
+      --purple-neon: #7209b7;
+      --danger: #ff0055;
+      --danger-dim: rgba(255, 0, 85, 0.15);
+      --text: #f0f6fc;
+      --text-dim: #7d8590;
+      --font-display: 'Chakra Petch', sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
+      --font-body: 'Inter', sans-serif;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     html, body {
       height: 100vh;
       max-height: 100vh;
       overflow: hidden;
       background-color: var(--bg);
-      color: var(--text-main);
-      font-family: var(--font-sans);
+      color: var(--text);
+      font-family: var(--font-body);
       line-height: 1.35;
       font-size: 13px;
+      background-image: 
+        radial-gradient(ellipse 90% 60% at 50% -10%, rgba(0, 243, 255, 0.08) 0%, transparent 70%),
+        linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 36px 36px, 36px 36px;
     }
 
-    /* Single Screen Viewport Container */
-    .app-viewport {
+    /* Master Single-Screen Frame */
+    .viewport {
       height: 100vh;
       max-height: 100vh;
       display: flex;
@@ -175,438 +189,747 @@ const HTML_CONTENT = `<!DOCTYPE html>
       padding: 10px 14px;
       gap: 8px;
       box-sizing: border-box;
+      position: relative;
     }
 
-    /* 1. Header Bar */
+    /* Futuristic HUD Panels */
+    .hud-panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      backdrop-filter: blur(14px);
+      position: relative;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 0 12px var(--panel-glow);
+    }
+    .hud-panel::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: 8px; right: 8px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0.6;
+    }
+
+    /* 1. Header Navigation Command Deck */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 12px;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
-      backdrop-filter: blur(12px);
+      padding: 6px 14px;
       flex-shrink: 0;
       gap: 12px;
     }
-    .brand { display: flex; align-items: center; gap: 10px; }
-    .brand-icon {
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-hex {
       width: 32px; height: 32px;
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(0, 243, 255, 0.2), rgba(114, 9, 183, 0.4));
+      border: 1px solid var(--cyan);
+      border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 16px;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+      font-size: 15px;
+      color: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 243, 255, 0.4);
+      animation: hexGlow 4s infinite alternate;
     }
-    .brand-title h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
-    .brand-title p { font-size: 11px; color: var(--text-muted); }
+    @keyframes hexGlow {
+      0% { box-shadow: 0 0 8px rgba(0, 243, 255, 0.3); }
+      100% { box-shadow: 0 0 16px rgba(0, 243, 255, 0.6); }
+    }
 
-    .header-center { display: flex; align-items: center; gap: 10px; }
+    .brand-title {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-title h1 {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-title h1 span.sys-code {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 243, 255, 0.3);
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(0, 243, 255, 0.06);
+    }
+    .brand-title p {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      letter-spacing: 0.02em;
+    }
 
-    /* Interval Input Form */
-    .interval-box {
-      display: flex; align-items: center; gap: 5px;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 8px;
+    /* Core Controls Deck */
+    .command-deck {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Standby Switch / Override */
+    .standby-hud {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
       padding: 3px 8px;
-      font-size: 12px;
     }
-    .interval-box label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; }
-    .interval-input {
-      width: 44px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+    .standby-pill {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.03em;
+    }
+    .standby-pill.standby {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border: 1px solid rgba(255, 183, 3, 0.4);
+      box-shadow: 0 0 8px rgba(255, 183, 3, 0.2);
+    }
+    .standby-pill.override {
+      background: rgba(181, 23, 158, 0.25);
+      color: #f72585;
+      border: 1px solid rgba(247, 37, 133, 0.5);
+      box-shadow: 0 0 10px rgba(247, 37, 133, 0.35);
+      animation: pulseAlert 2s infinite;
+    }
+    .standby-pill.active {
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid rgba(0, 255, 159, 0.4);
+      box-shadow: 0 0 8px rgba(0, 255, 159, 0.2);
+    }
+    @keyframes pulseAlert {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+
+    .btn-action-override {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-action-override.force-run {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #fff;
+      border-color: #f59e0b;
+      box-shadow: 0 0 10px rgba(217, 119, 6, 0.4);
+    }
+    .btn-action-override.force-run:hover {
+      background: #f59e0b;
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.6);
+    }
+    .btn-action-override.restore-standby {
+      background: rgba(114, 9, 183, 0.3);
+      border-color: rgba(181, 23, 158, 0.6);
+      color: #e0aaff;
+    }
+    .btn-action-override.restore-standby:hover {
+      background: rgba(181, 23, 158, 0.5);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(181, 23, 158, 0.5);
+    }
+
+    /* Editable Interval HUD */
+    .interval-hud {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(0, 243, 255, 0.2);
+      border-radius: 6px;
+      padding: 3px 8px;
+    }
+    .interval-hud label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+    .interval-input-field {
+      width: 42px;
+      background: rgba(0, 243, 255, 0.08);
+      border: 1px solid rgba(0, 243, 255, 0.3);
       border-radius: 4px;
       color: #fff;
       font-family: var(--font-mono);
       font-size: 12px;
       font-weight: 700;
       text-align: center;
-      padding: 2px 4px;
+      padding: 2px 3px;
     }
-    .interval-input:focus { outline: none; border-color: var(--primary); }
-    .btn-save-interval {
-      background: rgba(59, 130, 246, 0.2);
-      border: 1px solid rgba(59, 130, 246, 0.4);
-      color: #60a5fa;
-      border-radius: 5px;
+    .interval-input-field:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+    }
+    .btn-interval-save {
+      background: rgba(0, 243, 255, 0.15);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      font-family: var(--font-display);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border-radius: 4px;
       padding: 2px 7px;
-      font-size: 11px;
-      font-weight: 600;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.2s;
     }
-    .btn-save-interval:hover { background: #2563eb; color: #fff; }
-
-    /* Standby Switch / Override */
-    .standby-widget {
-      display: flex; align-items: center; gap: 6px;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 8px;
-      padding: 3px 8px;
-    }
-    .standby-badge {
-      font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
-    }
-    .standby-badge.standby { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-    .standby-badge.override { background: rgba(139, 92, 246, 0.2); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.4); }
-    .standby-badge.active { background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-
-    .btn-override {
-      font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 5px; cursor: pointer; border: 1px solid transparent; transition: all 0.15s;
-    }
-    .btn-override.force-run {
-      background: linear-gradient(135deg, #d97706, #b45309);
-      color: #fff;
-      box-shadow: 0 2px 8px rgba(217, 119, 6, 0.4);
-    }
-    .btn-override.force-run:hover { background: #b45309; }
-    .btn-override.restore-standby {
-      background: rgba(139, 92, 246, 0.2);
-      border-color: rgba(139, 92, 246, 0.4);
-      color: #c084fc;
-    }
-    .btn-override.restore-standby:hover { background: rgba(139, 92, 246, 0.35); color: #fff; }
-
-    /* Action buttons */
-    .header-actions { display: flex; align-items: center; gap: 8px; }
-    .status-badge {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 4px 10px; border-radius: 9999px;
-      font-size: 11px; font-weight: 700;
-    }
-    .status-badge.online {
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: var(--success);
-    }
-    .status-badge.stopped {
-      background: rgba(239, 68, 68, 0.12);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: var(--danger);
-    }
-    .pulse-dot { width: 6px; height: 6px; border-radius: 50%; }
-    .status-badge.online .pulse-dot {
-      background: var(--success);
-      box-shadow: 0 0 8px var(--success);
-      animation: pulse 2s infinite;
-    }
-    .status-badge.stopped .pulse-dot { background: var(--danger); }
-    @keyframes pulse {
-      0% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(1.3); }
-      100% { opacity: 1; transform: scale(1); }
+    .btn-interval-save:hover {
+      background: var(--cyan);
+      color: #030712;
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.6);
     }
 
-    .btn {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 5px 11px; border-radius: 7px;
-      font-size: 11px; font-weight: 600; cursor: pointer;
-      border: 1px solid transparent;
-      transition: all 0.15s ease;
-    }
-    .btn-pause {
-      background: rgba(245, 158, 11, 0.15);
-      border-color: rgba(245, 158, 11, 0.3);
-      color: #fbbf24;
-    }
-    .btn-pause:hover { background: rgba(245, 158, 11, 0.28); }
-    .btn-resume {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: rgba(16, 185, 129, 0.3);
-      color: #34d399;
-    }
-    .btn-resume:hover { background: rgba(16, 185, 129, 0.28); }
-    .btn-outline {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.12);
-      color: #fff;
-    }
-    .btn-outline:hover { background: rgba(255, 255, 255, 0.12); }
-    .btn-token {
-      background: linear-gradient(135deg, #1e40af, #2563eb);
-      color: #fff;
-    }
-    .btn-token:hover { background: #1d4ed8; }
-
-    /* 2. Compact Status Strip */
-    .status-strip {
-      display: grid;
-      grid-template-columns: 1.2fr 0.9fr 1.1fr 1fr;
+    /* Header Action Buttons */
+    .actions-deck {
+      display: flex;
+      align-items: center;
       gap: 8px;
-      background: rgba(15, 23, 42, 0.75);
-      border: 1px solid var(--card-border);
-      border-radius: 9px;
-      padding: 6px 12px;
+    }
+
+    .cyber-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .cyber-badge.online {
+      background: var(--green-dim);
+      border: 1px solid rgba(0, 255, 159, 0.4);
+      color: var(--green);
+      box-shadow: 0 0 10px rgba(0, 255, 159, 0.2);
+    }
+    .cyber-badge.stopped {
+      background: var(--danger-dim);
+      border: 1px solid rgba(255, 0, 85, 0.4);
+      color: var(--danger);
+      box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
+    }
+    .radar-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+    }
+    .cyber-badge.online .radar-dot {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: radarPulse 1.8s infinite;
+    }
+    .cyber-badge.stopped .radar-dot { background: var(--danger); }
+    @keyframes radarPulse {
+      0% { transform: scale(0.9); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.5; }
+      100% { transform: scale(0.9); opacity: 1; }
+    }
+
+    .btn-cyber {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 4px 11px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-cyber-pause {
+      background: var(--amber-dim);
+      border-color: rgba(255, 183, 3, 0.4);
+      color: var(--amber);
+    }
+    .btn-cyber-pause:hover {
+      background: rgba(255, 183, 3, 0.3);
+      box-shadow: 0 0 10px rgba(255, 183, 3, 0.4);
+    }
+    .btn-cyber-resume {
+      background: var(--green-dim);
+      border-color: rgba(0, 255, 159, 0.4);
+      color: var(--green);
+    }
+    .btn-cyber-resume:hover {
+      background: rgba(0, 255, 159, 0.3);
+      box-shadow: 0 0 10px rgba(0, 255, 159, 0.4);
+    }
+    .btn-cyber-outline {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.15);
+      color: var(--text);
+    }
+    .btn-cyber-outline:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+    }
+    .btn-cyber-key {
+      background: linear-gradient(135deg, rgba(0, 243, 255, 0.2), rgba(37, 99, 235, 0.5));
+      border: 1px solid var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.25);
+    }
+    .btn-cyber-key:hover {
+      background: var(--cyan);
+      color: #030712;
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+    }
+
+    /* 2. Quantum Telemetry Status Strip */
+    .telemetry-strip {
+      display: grid;
+      grid-template-columns: 1.3fr 0.8fr 1fr 1fr;
+      gap: 10px;
+      padding: 6px 14px;
       flex-shrink: 0;
       align-items: center;
+      font-size: 11px;
     }
-    .strip-item {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 11.5px;
+    .telemetry-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .strip-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 600; }
-    .strip-val { font-weight: 600; color: #fff; }
-    .token-pill {
-      font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
-      padding: 2px 6px; border-radius: 4px;
+    .hud-tag {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--cyan);
+      background: rgba(0, 243, 255, 0.08);
+      border: 1px solid rgba(0, 243, 255, 0.2);
+      padding: 1px 5px;
+      border-radius: 3px;
     }
-    .token-pill.valid { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
-    .token-pill.warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
-    .token-pill.expired { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .telemetry-val {
+      font-weight: 600;
+      color: #fff;
+      font-family: var(--font-body);
+    }
 
-    /* 3. Compact Metrics Row */
-    .metrics-row {
+    .neon-pill {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 3px;
+      letter-spacing: 0.02em;
+    }
+    .neon-pill.valid {
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid rgba(0, 255, 159, 0.35);
+      box-shadow: 0 0 8px rgba(0, 255, 159, 0.2);
+    }
+    .neon-pill.warning {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border: 1px solid rgba(255, 183, 3, 0.35);
+    }
+    .neon-pill.expired {
+      background: var(--danger-dim);
+      color: var(--danger);
+      border: 1px solid rgba(255, 0, 85, 0.35);
+    }
+
+    /* 3. Core Metrics Deck */
+    .metrics-deck {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 8px;
       flex-shrink: 0;
     }
-    .metric-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 9px;
-      padding: 8px 12px;
+    .metric-cell {
+      padding: 8px 14px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-    }
-    .metric-info { display: flex; flex-direction: column; }
-    .metric-label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; }
-    .metric-value { font-size: 22px; font-weight: 800; color: #fff; font-family: var(--font-mono); line-height: 1.1; margin: 2px 0; }
-    .metric-sub { font-size: 10px; color: var(--text-muted); }
-    .metric-icon { font-size: 22px; opacity: 0.8; }
-
-    /* 4. Terminal Section (Fills remaining screen space) */
-    .terminal-wrapper {
-      flex: 1;
-      min-height: 0; /* Critical for flex scroll */
-      display: flex;
-      flex-direction: column;
-      background: #03060d;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+      position: relative;
       overflow: hidden;
     }
-    .terminal-header {
-      background: rgba(255, 255, 255, 0.03);
-      padding: 6px 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      display: flex; justify-content: space-between; align-items: center;
+    .metric-cell::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; width: 24px; height: 24px;
+      background: radial-gradient(circle at top right, rgba(0, 243, 255, 0.15), transparent 70%);
+      pointer-events: none;
+    }
+    .metric-meta {
+      display: flex;
+      flex-direction: column;
+    }
+    .metric-title {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+    .metric-num {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.1;
+      margin: 2px 0;
+      letter-spacing: -0.02em;
+    }
+    .metric-hint {
+      font-size: 9.5px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+    }
+    .metric-icon-slot {
+      font-size: 24px;
+      filter: drop-shadow(0 0 8px rgba(0, 243, 255, 0.3));
+    }
+
+    /* 4. Cyber Terminal HUD (Fills entire bottom viewport space) */
+    .terminal-hud {
+      flex: 1;
+      min-height: 0; /* Crucial for zero-scroll flex child */
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid rgba(0, 243, 255, 0.25);
+      background: #02050c;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(0, 243, 255, 0.04);
+    }
+
+    .terminal-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 12px;
+      background: rgba(0, 243, 255, 0.05);
+      border-bottom: 1px solid rgba(0, 243, 255, 0.15);
       flex-shrink: 0;
     }
-    .terminal-dots { display: flex; gap: 5px; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; }
-    .dot-red { background: #ff5f56; }
-    .dot-yellow { background: #ffbd2e; }
-    .dot-green { background: #27c93f; }
-    .terminal-title {
-      font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); font-weight: 600;
+    .terminal-status-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .terminal-meta {
-      font-size: 10px; font-family: var(--font-mono); color: #60a5fa;
+    .tech-dots {
+      display: flex;
+      gap: 4px;
     }
-    .terminal-body {
+    .tech-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+    }
+    .td-red { background: #ff0055; box-shadow: 0 0 5px #ff0055; }
+    .td-amber { background: #ffb703; box-shadow: 0 0 5px #ffb703; }
+    .td-cyan { background: #00f3ff; box-shadow: 0 0 5px #00f3ff; }
+
+    .terminal-label {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--cyan);
+      text-transform: uppercase;
+    }
+    .terminal-telemetry-meta {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .terminal-screen {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
+      padding: 8px 12px;
       font-family: var(--font-mono);
       font-size: 11.5px;
       line-height: 1.45;
-      padding: 8px 12px;
-      background: #020409;
+      background: #010308;
+      color: #94a3b8;
     }
-    .log-line { white-space: pre-wrap; word-break: break-all; margin-bottom: 3px; }
-    .log-line.standby { color: #fde047; font-weight: 500; }
-    .log-line.info { color: #93c5fd; }
-    .log-line.skip { color: #fde047; }
-    .log-line.success { color: #86efac; font-weight: 600; }
-    .log-line.error { color: #fca5a5; font-weight: 600; }
+    .terminal-screen::-webkit-scrollbar { width: 5px; }
+    .terminal-screen::-webkit-scrollbar-track { background: #010308; }
+    .terminal-screen::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.25); border-radius: 3px; }
+    .terminal-screen::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
 
-    /* Modal Overlay */
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(8px);
+    .log-row {
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-bottom: 2px;
+    }
+    .log-row.standby { color: #fde047; font-weight: 600; text-shadow: 0 0 4px rgba(253, 224, 71, 0.3); }
+    .log-row.info { color: #7dd3fc; }
+    .log-row.skip { color: #fbbf24; }
+    .log-row.success { color: #4ade80; font-weight: 700; text-shadow: 0 0 6px rgba(74, 222, 128, 0.4); }
+    .log-row.error { color: #f87171; font-weight: 700; text-shadow: 0 0 6px rgba(248, 113, 113, 0.4); }
+
+    /* Modal Overlay (Cyber Glass) */
+    .modal-veil {
+      position: fixed; inset: 0; background: rgba(2, 5, 12, 0.85);
+      backdrop-filter: blur(10px);
       display: flex; align-items: center; justify-content: center;
-      padding: 20px; z-index: 1000; opacity: 0; pointer-events: none;
-      transition: opacity 0.2s ease;
+      padding: 20px; z-index: 9999; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .modal-overlay.open { opacity: 1; pointer-events: auto; }
-    .modal-box {
-      background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 14px; width: 100%; max-width: 540px; padding: 20px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
-      transform: scale(0.96); transition: transform 0.2s ease;
+    .modal-veil.open { opacity: 1; pointer-events: auto; }
+    .modal-dialog {
+      background: #070d1a;
+      border: 1px solid var(--cyan);
+      box-shadow: 0 0 35px rgba(0, 243, 255, 0.25), 0 20px 50px rgba(0, 0, 0, 0.9);
+      border-radius: 10px;
+      width: 100%; max-width: 520px;
+      padding: 20px;
+      transform: scale(0.96);
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
     }
-    .modal-overlay.open .modal-box { transform: scale(1); }
-    .modal-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px; }
-    .modal-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
-    .token-textarea {
+    .modal-veil.open .modal-dialog { transform: scale(1); }
+    .modal-head {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .modal-sub {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .cyber-textarea {
       width: 100%; height: 90px;
-      background: #060911; border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 8px; color: #fff; font-family: var(--font-mono);
-      font-size: 11px; padding: 10px; resize: none; margin-bottom: 12px;
+      background: #02050c;
+      border: 1px solid rgba(0, 243, 255, 0.25);
+      border-radius: 6px;
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 10px;
+      resize: none;
+      margin-bottom: 14px;
     }
-    .token-textarea:focus { outline: none; border-color: var(--primary); }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .cyber-textarea:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+    }
+    .modal-foot {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
 
-    /* Toast */
-    .toast {
-      position: fixed; bottom: 20px; right: 20px;
-      background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #fff; padding: 8px 16px; border-radius: 8px;
-      font-size: 12px; font-weight: 600;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-      opacity: 0; transform: translateY(10px);
+    /* Cyber Toast */
+    .cyber-toast {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      background: #091322;
+      border: 1px solid var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 243, 255, 0.35);
+      color: #fff;
+      padding: 7px 16px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      opacity: 0;
+      transform: translateY(10px);
       transition: all 0.25s ease;
-      z-index: 2000; pointer-events: none;
+      z-index: 10000;
+      pointer-events: none;
     }
-    .toast.show { opacity: 1; transform: translateY(0); }
+    .cyber-toast.show { opacity: 1; transform: translateY(0); }
   </style>
 </head>
 <body>
 
-  <div class="app-viewport">
+  <div class="viewport">
     
-    <!-- 1. Header Bar -->
-    <header>
-      <div class="brand">
-        <div class="brand-icon">⚡</div>
+    <!-- 1. Header Navigation Command Deck -->
+    <header class="hud-panel">
+      <div class="brand-group">
+        <div class="brand-hex">⚡</div>
         <div class="brand-title">
-          <h1>Demand Automator <span id="statusBadge" class="status-badge stopped"><span class="pulse-dot"></span><span id="statusText">CHECKING...</span></span></h1>
-          <p>Nagarro Opportunistic Placement • Autonomous Cloud Runner</p>
+          <h1>DEMAND AUTOMATOR <span class="sys-code">AWS-EC2 // v4.0</span></h1>
+          <p>NAGARRO OPPORTUNISTIC PLACEMENT • QUANTUM ENGINE</p>
         </div>
       </div>
 
-      <!-- Center Controls: Interval & Standby Override -->
-      <div class="header-center">
+      <!-- Core Controls Deck: Standby & Interval -->
+      <div class="command-deck">
         <!-- Standby Status & Override -->
-        <div class="standby-widget">
-          <span id="badgeStandby" class="standby-badge standby">🌙 Standby</span>
-          <button id="btnToggleStandby" class="btn-override force-run" onclick="toggleStandbyOverride()">
-            ⚡ Run Now (Override)
+        <div class="standby-hud">
+          <span id="badgeStandby" class="standby-pill standby">🌙 STANDBY</span>
+          <button id="btnToggleStandby" class="btn-action-override force-run" onclick="toggleStandbyOverride()">
+            ⚡ FORCE RUN NOW
           </button>
         </div>
 
-        <!-- Editable Interval -->
-        <div class="interval-box">
-          <label>Poll:</label>
-          <input type="number" id="inputInterval" class="interval-input" min="5" max="3600" value="30" title="Cycle interval in seconds">
-          <span style="color: var(--text-muted); font-size: 11px;">sec</span>
-          <button class="btn-save-interval" onclick="saveInterval()" title="Save & apply new interval">Save</button>
+        <!-- Editable Polling Interval -->
+        <div class="interval-hud">
+          <label>POLL:</label>
+          <input type="number" id="inputInterval" class="interval-input-field" min="5" max="3600" value="30" title="Cycle interval in seconds">
+          <span style="color: var(--text-dim); font-size: 10px; font-family: var(--font-mono);">SEC</span>
+          <button class="btn-interval-save" onclick="saveInterval()" title="Save & apply new interval">SET</button>
         </div>
       </div>
 
-      <!-- Right Actions -->
-      <div class="header-actions">
-        <button id="btnPauseResume" class="btn btn-pause" onclick="togglePauseResume()">
-          <span id="iconPR">⏸️</span> <span id="textPR">Pause</span>
+      <!-- Actions Deck -->
+      <div class="actions-deck">
+        <span id="statusBadge" class="cyber-badge stopped">
+          <span class="radar-dot"></span>
+          <span id="statusText">CHECKING...</span>
+        </span>
+        <button id="btnPauseResume" class="btn-cyber btn-cyber-pause" onclick="togglePauseResume()">
+          <span id="iconPR">⏸️</span> <span id="textPR">PAUSE</span>
         </button>
-        <button class="btn btn-outline" onclick="restartEngine()" title="Restart engine process">
-          🔄 Restart
+        <button class="btn-cyber btn-cyber-outline" onclick="restartEngine()" title="Reboot engine process">
+          🔄 REBOOT
         </button>
-        <button class="btn btn-token" onclick="openTokenModal()">
-          🔑 Token
+        <button class="btn-cyber btn-cyber-key" onclick="openTokenModal()">
+          🔑 TOKEN
         </button>
       </div>
     </header>
 
-    <!-- 2. Compact Status Strip -->
-    <div class="status-strip">
-      <div class="strip-item">
-        <span class="strip-label">Candidate:</span>
-        <span id="stripCandidate" class="strip-val">Pankaj Kumar (pankaj.kumar07@nagarro.com)</span>
+    <!-- 2. Quantum Telemetry Strip -->
+    <div class="telemetry-strip hud-panel">
+      <div class="telemetry-item">
+        <span class="hud-tag">OPERATOR</span>
+        <span id="stripCandidate" class="telemetry-val">Pankaj Kumar (pankaj.kumar07@nagarro.com)</span>
       </div>
-      <div class="strip-item">
-        <span class="strip-label">Token:</span>
-        <span id="stripTokenPill" class="token-pill valid">Valid: --:--</span>
+      <div class="telemetry-item">
+        <span class="hud-tag">TTL</span>
+        <span id="stripTokenPill" class="neon-pill valid">VALID: --:--</span>
       </div>
-      <div class="strip-item">
-        <span class="strip-label">Entra ID:</span>
-        <span id="stripAutoRenew" class="strip-val" style="color: #34d399;">✅ 45m Auto-Renew Active</span>
+      <div class="telemetry-item">
+        <span class="hud-tag">CIRCUIT</span>
+        <span id="stripAutoRenew" class="telemetry-val" style="color: var(--green);">⚡ Entra ID 45m Auto-Renew Active</span>
       </div>
-      <div class="strip-item" style="justify-content: flex-end;">
-        <span class="strip-label">Server:</span>
-        <span id="stripServer" class="strip-val" style="font-family: var(--font-mono); font-size: 11px;">RAM: -- MB | CPU: --% | Up: --</span>
-      </div>
-    </div>
-
-    <!-- 3. Compact Metrics Row -->
-    <div class="metrics-row">
-      <div class="metric-card">
-        <div class="metric-info">
-          <span class="metric-label">Scan Cycles</span>
-          <span id="valCycles" class="metric-value">#0</span>
-          <span id="valLastScan" class="metric-sub">Last: Never</span>
-        </div>
-        <div class="metric-icon">🔄</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-info">
-          <span class="metric-label">Demands Evaluated</span>
-          <span id="valEvaluated" class="metric-value">0</span>
-          <span class="metric-sub">Gurugram & WFA</span>
-        </div>
-        <div class="metric-icon">🔍</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-info">
-          <span class="metric-label">Skipped Demands</span>
-          <span id="valSkipped" class="metric-value">0</span>
-          <span class="metric-sub">Python-Only / Applied</span>
-        </div>
-        <div class="metric-icon">⏭️</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-info">
-          <span class="metric-label">Auto-Applied</span>
-          <span id="valApplied" class="metric-value" style="color: #34d399;">0</span>
-          <span class="metric-sub">Frontend / Full-stack</span>
-        </div>
-        <div class="metric-icon">🎯</div>
+      <div class="telemetry-item" style="justify-content: flex-end;">
+        <span class="hud-tag">NODE</span>
+        <span id="stripServer" class="telemetry-val" style="font-family: var(--font-mono); font-size: 11px;">RAM: -- MB | CPU: --% | UPTIME: --</span>
       </div>
     </div>
 
-    <!-- 4. Live Terminal Viewport (Fills remaining space) -->
-    <div class="terminal-wrapper">
-      <div class="terminal-header">
-        <div class="terminal-dots">
-          <div class="dot dot-red"></div>
-          <div class="dot dot-yellow"></div>
-          <div class="dot dot-green"></div>
+    <!-- 3. Core Metrics Deck -->
+    <div class="metrics-deck">
+      <div class="metric-cell hud-panel">
+        <div class="metric-meta">
+          <span class="metric-title">CYCLES EXECUTED</span>
+          <span id="valCycles" class="metric-num">#0</span>
+          <span id="valLastScan" class="metric-hint">LAST: NEVER</span>
         </div>
-        <div class="terminal-title">LIVE CLOUD TELEMETRY • AWS EC2 (Mumbai ap-south-1)</div>
-        <div id="terminalMeta" class="terminal-meta">PM2 PID: -- • Mon-Fri (8AM-8PM IST)</div>
+        <div class="metric-icon-slot">🔄</div>
       </div>
-      <div id="terminalLogs" class="terminal-body">
-        <div class="log-line info">Connecting to AWS cloud logs...</div>
+
+      <div class="metric-cell hud-panel">
+        <div class="metric-meta">
+          <span class="metric-title">DEMANDS EVALUATED</span>
+          <span id="valEvaluated" class="metric-num">0</span>
+          <span class="metric-hint">LOC: GURUGRAM & WFA</span>
+        </div>
+        <div class="metric-icon-slot">🔍</div>
+      </div>
+
+      <div class="metric-cell hud-panel">
+        <div class="metric-meta">
+          <span class="metric-title">DISQUALIFIED / SKIPPED</span>
+          <span id="valSkipped" class="metric-num">0</span>
+          <span class="metric-hint">PYTHON-ONLY / APPLIED</span>
+        </div>
+        <div class="metric-icon-slot">⏭️</div>
+      </div>
+
+      <div class="metric-cell hud-panel">
+        <div class="metric-meta">
+          <span class="metric-title">AUTO-APPLIED</span>
+          <span id="valApplied" class="metric-num" style="color: var(--green); text-shadow: 0 0 12px rgba(0, 255, 159, 0.4);">0</span>
+          <span class="metric-hint">FRONTEND & FULL-STACK</span>
+        </div>
+        <div class="metric-icon-slot">🎯</div>
+      </div>
+    </div>
+
+    <!-- 4. Cyber Terminal HUD (Fills remaining screen height) -->
+    <div class="terminal-hud hud-panel">
+      <div class="terminal-bar">
+        <div class="terminal-status-left">
+          <div class="tech-dots">
+            <div class="tech-dot td-red"></div>
+            <div class="tech-dot td-amber"></div>
+            <div class="tech-dot td-cyan"></div>
+          </div>
+          <span class="terminal-label">LIVE CLOUD TELEMETRY STREAM</span>
+        </div>
+        <div id="terminalMeta" class="terminal-telemetry-meta">
+          PM2 PID: -- • INTERVAL: 30S • AP-SOUTH-1
+        </div>
+      </div>
+      <div id="terminalLogs" class="terminal-screen">
+        <div class="log-row info">Initializing quantum telemetry pipeline...</div>
       </div>
     </div>
 
   </div>
 
-  <!-- Token Modal -->
-  <div id="tokenModal" class="modal-overlay" onclick="if(event.target===this) closeTokenModal()">
-    <div class="modal-box">
-      <h2 class="modal-title">🔑 Update Azure AD / Refresh Token</h2>
-      <p class="modal-desc">Paste your fresh Microsoft Entra ID Refresh Token (recommended for 24/7 autonomous renewal) or Bearer Access Token.</p>
-      <textarea id="tokenInput" class="token-textarea" placeholder="Paste token here (starts with '0.A...' or 'eyJ...')..."></textarea>
-      <div class="modal-actions">
-        <button class="btn btn-outline" onclick="closeTokenModal()">Cancel</button>
-        <button id="btnSaveToken" class="btn btn-token" onclick="submitToken()">Save & Enable Auto-Renew</button>
+  <!-- Token Modal Dialog -->
+  <div id="tokenModal" class="modal-veil" onclick="if(event.target===this) closeTokenModal()">
+    <div class="modal-dialog">
+      <h2 class="modal-head">🔑 MICROSOFT ENTRA ID CREDENTIAL</h2>
+      <p class="modal-sub">Paste your authentic Microsoft Refresh Token (for 24/7 autonomous cloud rotation) or standard Bearer Token.</p>
+      <textarea id="tokenInput" class="cyber-textarea" placeholder="Paste token string here (starts with '0.A...' or 'eyJ...')..."></textarea>
+      <div class="modal-foot">
+        <button class="btn-cyber btn-cyber-outline" onclick="closeTokenModal()">CANCEL</button>
+        <button id="btnSaveToken" class="btn-cyber btn-cyber-key" onclick="submitToken()">SAVE & ENGAGE AUTO-RENEW</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="toast" class="toast">Action notification</div>
+  <!-- Toast Notification -->
+  <div id="toast" class="cyber-toast">System notification</div>
 
   <script>
     let currentStatus = 'unknown';
@@ -618,42 +941,43 @@ const HTML_CONTENT = `<!DOCTYPE html>
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
       t.innerText = msg;
-      t.style.borderColor = isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+      t.style.borderColor = isError ? 'var(--danger)' : 'var(--cyan)';
+      t.style.boxShadow = isError ? '0 0 20px rgba(255, 0, 85, 0.4)' : '0 0 20px rgba(0, 243, 255, 0.4)';
       t.classList.add('show');
       setTimeout(() => t.classList.remove('show'), 3000);
     }
 
     function formatUptime(seconds) {
-      if (!seconds) return '0s';
+      if (!seconds) return '0S';
       const d = Math.floor(seconds / 86400);
       const h = Math.floor((seconds % 86400) / 3600);
       const m = Math.floor((seconds % 3600) / 60);
       const s = seconds % 60;
-      if (d > 0) return d + 'd ' + h + 'h';
-      if (h > 0) return h + 'h ' + m + 'm';
-      if (m > 0) return m + 'm ' + s + 's';
-      return s + 's';
+      if (d > 0) return d + 'D ' + h + 'H';
+      if (h > 0) return h + 'H ' + m + 'M';
+      if (m > 0) return m + 'M ' + s + 'S';
+      return s + 'S';
     }
 
     function updateCountdown() {
       const el = document.getElementById('stripTokenPill');
       if (!tokenExpTimestamp) {
-        el.innerText = 'No Token';
-        el.className = 'token-pill expired';
+        el.innerText = 'NO TOKEN';
+        el.className = 'neon-pill expired';
         return;
       }
       const now = Math.floor(Date.now() / 1000);
       const diff = tokenExpTimestamp - now;
       if (diff <= 0) {
-        el.innerText = 'Expired (Auto-renewing...)';
-        el.className = 'token-pill expired';
+        el.innerText = 'EXPIRED (ROTATING...)';
+        el.className = 'neon-pill expired';
       } else {
         const m = Math.floor(diff / 60);
         const s = diff % 60;
-        el.innerText = 'Valid: ' + m + 'm ' + (s < 10 ? '0' : '') + s + 's';
-        if (diff > 900) el.className = 'token-pill valid';
-        else if (diff > 300) el.className = 'token-pill warning';
-        else el.className = 'token-pill expired';
+        el.innerText = 'VALID: ' + m + 'M ' + (s < 10 ? '0' : '') + s + 'S';
+        if (diff > 900) el.className = 'neon-pill valid';
+        else if (diff > 300) el.className = 'neon-pill warning';
+        else el.className = 'neon-pill expired';
       }
     }
 
@@ -672,21 +996,21 @@ const HTML_CONTENT = `<!DOCTYPE html>
           const textPR = document.getElementById('textPR');
 
           if (currentStatus === 'online') {
-            badge.className = 'status-badge online';
+            badge.className = 'cyber-badge online';
             text.innerText = 'ONLINE';
-            btnPR.className = 'btn btn-pause';
+            btnPR.className = 'btn-cyber btn-cyber-pause';
             iconPR.innerText = '⏸️';
-            textPR.innerText = 'Pause';
+            textPR.innerText = 'PAUSE';
           } else {
-            badge.className = 'status-badge stopped';
+            badge.className = 'cyber-badge stopped';
             text.innerText = 'PAUSED';
-            btnPR.className = 'btn btn-resume';
+            btnPR.className = 'btn-cyber btn-cyber-resume';
             iconPR.innerText = '▶️';
-            textPR.innerText = 'Resume';
+            textPR.innerText = 'RESUME';
           }
 
-          document.getElementById('stripServer').innerText = 'RAM: ' + data.pm2.memoryMb + ' MB | CPU: ' + data.pm2.cpu + '% | Up: ' + formatUptime(data.pm2.uptime);
-          document.getElementById('terminalMeta').innerText = 'PM2: ' + currentStatus.toUpperCase() + ' (RAM: ' + data.pm2.memoryMb + 'MB) • Interval: ' + (data.runtimeConfig?.pollIntervalSeconds || 30) + 's';
+          document.getElementById('stripServer').innerText = 'RAM: ' + data.pm2.memoryMb + ' MB | CPU: ' + data.pm2.cpu + '% | UPTIME: ' + formatUptime(data.pm2.uptime);
+          document.getElementById('terminalMeta').innerText = 'PM2: ' + currentStatus.toUpperCase() + ' (RAM: ' + data.pm2.memoryMb + 'MB) • INTERVAL: ' + (data.runtimeConfig?.pollIntervalSeconds || 30) + 'S';
         }
 
         // Runtime Config: Interval & Standby Override
@@ -711,9 +1035,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
         // Auto Renew
         if (data.hasRefreshToken) {
-          document.getElementById('stripAutoRenew').innerHTML = '<span style="color: #34d399;">✅ 45m Auto-Renew Active</span>';
+          document.getElementById('stripAutoRenew').innerHTML = '<span style="color: var(--green);">⚡ Entra ID 45m Auto-Renew Active</span>';
         } else {
-          document.getElementById('stripAutoRenew').innerHTML = '<span style="color: #f59e0b;">⚠️ Manual Token Only</span>';
+          document.getElementById('stripAutoRenew').innerHTML = '<span style="color: var(--amber);">⚠️ Manual Token (Rotation Inactive)</span>';
         }
 
         // Stats
@@ -722,7 +1046,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
           document.getElementById('valEvaluated').innerText = (data.stats.cycles * 2);
           document.getElementById('valSkipped').innerText = (data.stats.skippedAlreadyApplied + data.stats.skippedPythonOnly);
           document.getElementById('valApplied').innerText = data.stats.applied;
-          document.getElementById('valLastScan').innerText = 'Last: ' + data.stats.lastScan;
+          document.getElementById('valLastScan').innerText = 'LAST: ' + data.stats.lastScan;
         }
 
         // Logs
@@ -735,7 +1059,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
             else if (line.includes('APPLIED to')) cls = 'success';
             else if (line.includes('[SUCCESS]') || line.includes('auto-renewed')) cls = 'success';
             else if (line.includes('[ERROR]') || line.includes('Error')) cls = 'error';
-            return '<div class="log-line ' + cls + '">' + escapeHtml(line) + '</div>';
+            return '<div class="log-row ' + cls + '">' + escapeHtml(line) + '</div>';
           }).join('');
           term.scrollTop = term.scrollHeight;
         }
@@ -756,22 +1080,22 @@ const HTML_CONTENT = `<!DOCTYPE html>
       const isNormalWorkingHours = (day >= 1 && day <= 5 && hour >= 8 && hour < 20);
 
       if (isOverrideActive) {
-        badge.className = 'standby-badge override';
-        badge.innerText = '⚡ Override Active';
-        btn.className = 'btn-override restore-standby';
-        btn.innerText = '🌙 Re-enable Auto Standby';
+        badge.className = 'standby-pill override';
+        badge.innerText = '⚡ OVERRIDE ACTIVE';
+        btn.className = 'btn-action-override restore-standby';
+        btn.innerText = '🌙 RE-ENABLE STANDBY';
         btn.title = 'Return to scheduled standby (Mon-Fri 8AM-8PM IST)';
       } else if (!isNormalWorkingHours) {
-        badge.className = 'standby-badge standby';
-        badge.innerText = (day === 0 || day === 6) ? '🏖️ Weekend Standby' : '🌙 Night Standby (8AM-8PM)';
-        btn.className = 'btn-override force-run';
-        btn.innerText = '⚡ Run Now (Override)';
+        badge.className = 'standby-pill standby';
+        badge.innerText = (day === 0 || day === 6) ? '🏖️ WEEKEND STANDBY' : '🌙 NIGHT STANDBY';
+        btn.className = 'btn-action-override force-run';
+        btn.innerText = '⚡ FORCE RUN NOW';
         btn.title = 'Bypass schedule and run automation immediately right now';
       } else {
-        badge.className = 'standby-badge active';
-        badge.innerText = '🟢 Active Window (8AM-8PM)';
-        btn.className = 'btn-override restore-standby';
-        btn.innerText = '🌙 Force Standby Sleep';
+        badge.className = 'standby-pill active';
+        badge.innerText = '🟢 ACTIVE WINDOW';
+        btn.className = 'btn-action-override restore-standby';
+        btn.innerText = '🌙 FORCE STANDBY';
         btn.title = 'Put engine into standby sleep mode';
       }
     }
@@ -813,7 +1137,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         });
         const data = await res.json();
         if (data.success) {
-          showToast('⏱️ Poll interval updated to ' + sec + 's! Engine restarted.');
+          showToast('⏱️ Poll interval calibrated to ' + sec + 's! Engine rebooted.');
           fetchData();
         } else {
           showToast('Failed: ' + (data.error || 'Could not update interval'), true);
@@ -828,7 +1152,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
       try {
         const res = await fetch('/api/engine/' + action, { method: 'POST' });
         const data = await res.json();
-        showToast(action === 'pause' ? '⏸️ Automation paused.' : '▶️ Automation resumed!');
+        showToast(action === 'pause' ? '⏸️ Automation paused.' : '▶️ Automation engaged!');
         fetchData();
       } catch (e) {
         showToast('Action failed: ' + e.message, true);
@@ -838,10 +1162,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
     async function restartEngine() {
       try {
         await fetch('/api/engine/restart', { method: 'POST' });
-        showToast('🔄 Automation engine restarted!');
+        showToast('🔄 Quantum engine rebooted!');
         fetchData();
       } catch (e) {
-        showToast('Restart failed: ' + e.message, true);
+        showToast('Reboot failed: ' + e.message, true);
       }
     }
 
@@ -863,7 +1187,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
       }
       const btn = document.getElementById('btnSaveToken');
       btn.disabled = true;
-      btn.innerText = 'Activating on AWS...';
+      btn.innerText = 'CALIBRATING ON AWS...';
 
       try {
         const res = await fetch('/api/token/update', {
@@ -873,7 +1197,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         });
         const data = await res.json();
         if (data.success) {
-          showToast(data.message || '🎉 Autonomous auto-renewal activated on AWS!');
+          showToast(data.message || '🎉 Autonomous auto-renewal engaged on AWS!');
           closeTokenModal();
           fetchData();
         } else {
@@ -883,7 +1207,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
         showToast('Error: ' + e.message, true);
       } finally {
         btn.disabled = false;
-        btn.innerText = 'Save & Enable Auto-Renew';
+        btn.innerText = 'SAVE & ENGAGE AUTO-RENEW';
       }
     }
 
