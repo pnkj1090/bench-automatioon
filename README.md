@@ -2,7 +2,7 @@
 
 An enterprise-grade, autonomous cloud monitoring and candidate placement suite for the Nagarro Opportunistic Placement portal (`https://opportunistic-placement.azurewebsites.net/demands`).
 
-Built to run 24/7 on AWS EC2 with autonomous Azure AD session renewal, business-hours scheduling, intelligent role classification, dynamic pitch generation, and an encrypted zero-exposure management dashboard.
+Built to run 24/7 on AWS EC2 with autonomous Azure AD session renewal, business-hours scheduling, intelligent role classification, dynamic pitch generation, WhatsApp notifications, and an encrypted zero-exposure management dashboard.
 
 ---
 
@@ -13,11 +13,10 @@ Built to run 24/7 on AWS EC2 with autonomous Azure AD session renewal, business-
 - Automatically enters low-resource standby mode overnight and across weekends (Saturday & Sunday).
 - Configurable directly in `config.js`.
 
-### 2. 🔄 Autonomous Azure AD Token Renewal (`renew-token.js`)
-- Directly interfaces with **Microsoft Entra ID** (`login.microsoftonline.com`) using Azure AD Refresh Tokens.
-- Automatically refreshes the OAuth2 bearer access token every 45 minutes.
-- Implements immediate 401 retry loops: if a token expires mid-cycle, the engine pauses, fetches a fresh token, and resumes seamlessly.
-- Eliminates manual browser token extraction.
+### 2. 🔄 Autonomous 24/7 Azure AD Session Renewal (`renew-session-headless.js`)
+- **Proactive Headless Renewer**: Every 20 hours, a headless Chromium browser on EC2 opens the portal with persistent Microsoft Entra ID session cookies (`ESTSAUTHPERSISTENT`), resets the 24-hour Single Page App (SPA) token window, and extracts fresh tokens.
+- **Fast 45-Minute OAuth Rotation**: Rotates access tokens every 45 minutes using standard OAuth2 refresh grants.
+- **Reactive Self-Healing**: If any `401 Unauthorized` or `AADSTS700084` occurs, the engine triggers the headless browser immediately, re-authenticates, and retries seamlessly without failing scans.
 
 ### 3. 🎯 Smart Role Classifier (`classifier.js`)
 Evaluates opportunities against candidate skills and genus levels:
@@ -28,16 +27,166 @@ Evaluates opportunities against candidate skills and genus levels:
 | **Python Only** (e.g. Backend FastAPI/Django only) | 🚫 Disqualified | **SKIP** (Logs reason, leaves untouched) |
 | **Already Applied / Under Review** | ⏭️ Skipped | **SKIP** (Prevents duplicate submissions) |
 
-### 4. 📝 AI Pitch & Authentic Resume Upload
-- **Pitch Generator**: Generates customized candidate pitches (< 1,000 characters) emphasizing relevant frontend and full-stack capabilities without exaggeration.
+### 4. 📝 Human-Sounding AI Pitch & Authentic Resume Upload
+- **Pitch Generator**: Generates customized candidate pitches (< 1,000 characters) emphasizing relevant frontend and full-stack capabilities in natural, professional language.
 - **Skill Checklist**: Automatically verifies and checks 100% of required must-have skills on the application modal.
 - **Resume Submission**: Direct multi-part form attachment of authentic `.docx` resume.
 
-### 5. 🔒 Zero-Exposure Security Model
+### 5. 📱 Real-Time WhatsApp Alerts (`whatsapp.js`)
+- Integrates with CallMeBot to send instant alerts whenever an eligible demand is auto-applied.
+- Configurable directly from the web dashboard.
+
+### 6. 🔒 Zero-Exposure Security Model
 - **No Public Web Endpoints**: The management dashboard binds strictly to `127.0.0.1:3000` (loopback only) on the cloud instance. Public inbound port 3000 is permanently closed on the AWS Security Group.
 - **Encrypted SSH Tunneling**: Accessible from your local machine via an encrypted tunnel (`./open-dashboard.sh`), opening `http://localhost:3000` securely.
 - **Hardened Permissions**: Token storage (`token.txt`, `refresh-token.txt`) is restricted with Unix `chmod 600`.
-- **Git Shield**: Private keys (`*.pem`), tokens, `.env` files, deployment metadata, and personal resume files (`*.docx`) are strictly ignored via `.gitignore`.
+- **Git Shield**: Private keys (`*.pem`), tokens, session cookies (`auth-state.json`), `.env` files, deployment metadata, and personal resume files (`*.docx`) are strictly ignored via `.gitignore`.
+
+---
+
+## 🚀 Step-by-Step Guide: Deploying on Your Own AWS Account
+
+Follow these steps to run this automation suite 24/7 on your own AWS account:
+
+### Step 1: Personalize Your Candidate Profile
+
+1. **Replace the Resume**:
+   - Place your authentic resume in the root folder as `resume.docx` (replacing the existing file).
+2. **Update Pitch & Experience**:
+   - In `ai-pitch-generator.js`, customize your role title (e.g. *Senior Software Engineer*, *Lead Consultant*), years of experience, and primary skill specializations.
+3. **Review Role Filters**:
+   - In `config.js`, customize `CONFIG.filters.genus`, `CONFIG.filters.location`, and `CONFIG.rules` to match your targeted roles.
+
+---
+
+### Step 2: Deploy to AWS EC2
+
+You can deploy using either the automated script or manual console setup:
+
+#### Option A: Automated Provisioning Script
+1. Export your AWS credentials in your terminal:
+   ```bash
+   export AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY"
+   export AWS_SECRET_ACCESS_KEY="YOUR_SECRET_KEY"
+   export AWS_REGION="ap-south-1" # Or your preferred AWS region
+   ```
+2. Run the deployment script:
+   ```bash
+   node deploy-to-aws.js
+   ```
+   *This automatically provisions the EC2 instance, security group, SSH key pair (`demand-automator-key.pem`), and transfers the project files.*
+
+#### Option B: Manual AWS Console Launch
+1. Launch an EC2 instance:
+   - **Name**: `demand-automator`
+   - **AMI**: Amazon Linux 2023
+   - **Instance Type**: `t3.micro` (or `t2.micro`)
+   - **Storage**: 8 GB gp3 SSD
+   - **Key Pair**: Download your `.pem` key (e.g. `demand-automator-key.pem`)
+   - **Security Group Inbound Rules**:
+     - Port `22` (SSH) — restricted to your IP
+2. SSH into your instance:
+   ```bash
+   chmod 400 demand-automator-key.pem
+   ssh -i demand-automator-key.pem ec2-user@<YOUR_EC2_PUBLIC_IP>
+   ```
+3. Install Node.js 18+ and PM2:
+   ```bash
+   sudo dnf install -y nodejs
+   sudo npm install -g pm2
+   ```
+4. Transfer project files to `/home/ec2-user/bench-automation/`.
+
+---
+
+### Step 3: Configure EC2 for Headless Browser (Crucial)
+
+Because `t3.micro` has 1 GB RAM, configure swap memory and system libraries to ensure Chromium runs reliably without hitting Linux OOM killer:
+
+Inside your EC2 SSH session:
+```bash
+# 1. Enable 2 GB swap space
+sudo dd if=/dev/zero of=/swapfile bs=128M count=16
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile swap swap defaults 0 0' | sudo tee -a /etc/fstab
+
+# 2. Install Chromium native system shared libraries
+sudo dnf install -y atk at-spi2-atk libX11 libXcomposite libXdamage libXext libXfixes libXrandr mesa-libgbm libxcb libxkbcommon alsa-lib at-spi2-core nss pango cups-libs
+
+# 3. Install project dependencies and Playwright Chromium
+cd /home/ec2-user/bench-automation
+npm install
+npx playwright install chromium
+```
+
+---
+
+### Step 4: 1-Time Session Synchronization (Laptop -> EC2)
+
+To enable autonomous cloud renewal, the EC2 instance needs Microsoft's persistent SSO cookie (`ESTSAUTHPERSISTENT`):
+
+1. On your local laptop, open `sync-session-to-ec2.js` and ensure `EC2_HOST` matches your EC2 public IP.
+2. Run the synchronizer script:
+   ```bash
+   node sync-session-to-ec2.js
+   ```
+3. A browser window opens on your screen. Sign in with your corporate Microsoft SSO credentials and select **"Stay signed in: Yes"**.
+4. The script automatically captures your persistent session cookies, uploads `auth-state.json` to your EC2 instance, and executes a verification test.
+
+---
+
+### Step 5: Start 24/7 PM2 Daemons on EC2
+
+In your EC2 SSH terminal:
+```bash
+cd /home/ec2-user/bench-automation
+
+# Start the scanner daemon and web dashboard
+pm2 start worker.js --name "prod-automator" -- --target=prod
+pm2 start dashboard.js --name "web-dashboard"
+
+# Install log rotation to keep disk usage under control
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 5
+
+# Ensure PM2 services restart automatically across server reboots
+pm2 save
+sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ec2-user --hp /home/ec2-user
+```
+
+---
+
+### Step 6: Access the Dashboard & Configure Alerts
+
+1. From your local Mac/PC, run:
+   ```bash
+   ./open-dashboard.sh
+   ```
+   This creates an encrypted SSH tunnel and opens `http://localhost:3000` in your browser.
+2. (Optional) To enable WhatsApp alerts:
+   - Click **WhatsApp Notifications** in the top navigation.
+   - Enter your phone number and free [CallMeBot](https://www.callmebot.com/) API key.
+   - Click **Send Test Alert** & **Save Settings**.
+
+---
+
+## 💰 Monthly AWS Cost Breakdown
+
+Running continuously on AWS in `ap-south-1` (Mumbai):
+
+| Resource | Rate | Monthly Cost (USD) | Monthly Cost (INR) |
+| :--- | :--- | :--- | :--- |
+| **EC2 `t3.micro`** (720 hrs/mo) | $0.0104 / hr | $7.49 | ~₹625 |
+| **Public IPv4 Address** | $0.0050 / hr | $3.60 | ~₹300 |
+| **8 GB gp3 SSD Disk** | $0.08 / GB-mo | $0.64 | ~₹53 |
+| **Data Transfer Egress** | First 100 GB/mo free | $0.00 | ₹0 |
+| **Total (Standard On-Demand)** | | **~$11.73 / month** | **~₹975 / month** |
+| **Total (AWS 12-Month Free Tier)** | | **$0.00 / month** | **₹0 (100% Free)** |
+
+*Daily run rate: ~$0.39 / day (~₹32 / day).*
 
 ---
 
@@ -47,9 +196,12 @@ Evaluates opportunities against candidate skills and genus levels:
 ├── config.js                 # Global settings (Schedule, targets, poll intervals)
 ├── engine.js                 # Autonomous cloud production runner & API client
 ├── renew-token.js            # Microsoft Entra ID OAuth2 token renewal service
+├── renew-session-headless.js # Autonomous 24/7 headless browser token renewer
+├── sync-session-to-ec2.js    # 1-time session state synchronizer (Laptop -> EC2)
 ├── dashboard.js              # Private monitoring dashboard server (localhost:3000)
 ├── classifier.js             # Intelligent role classification (Frontend vs Python)
 ├── ai-pitch-generator.js     # Context-aware candidate pitch synthesis
+├── whatsapp.js               # CallMeBot WhatsApp alert integration
 ├── open-dashboard.sh         # One-click SSH tunnel to access cloud dashboard locally
 ├── deploy-to-aws.js          # Automated EC2 provisioner and deployment orchestrator
 ├── ecosystem.config.cjs      # PM2 process configuration for production
@@ -57,92 +209,10 @@ Evaluates opportunities against candidate skills and genus levels:
 ├── mock-service.js           # Mock API service simulator
 ├── mock-data.js              # Initial mock opportunities and demand fixtures
 ├── public/                   # Web dashboard UI assets (HTML, CSS, JS)
-├── prod-automator.js         # Browser DevTools fallback console script
+├── resume.docx               # Authentic candidate resume submitted with applications
 ├── Dockerfile                # Containerized deployment definition
-└── AWS_DEPLOYMENT.md         # Detailed AWS architecture and operational notes
+└── AWS_DEPLOYMENT.md         # Additional AWS architecture and deployment notes
 ```
-
----
-
-## ⚙️ Configuration (`config.js`)
-
-Key parameters can be customized in `config.js`:
-
-```javascript
-export default {
-  // Operational Schedule (IST / Asia/Kolkata)
-  schedule: {
-    enabled: true,
-    timezone: "Asia/Kolkata",
-    activeDays: [1, 2, 3, 4, 5], // Monday (1) to Friday (5)
-    activeStartHour: 8,          // 8:00 AM IST
-    activeEndHour: 20            // 8:00 PM IST
-  },
-
-  // Target Filters
-  targetLocations: ["India - Gurugram, Haryana", "India - WFA"],
-  targetGenus: [
-    "2.1-PYTHON", "2.2-PYTHON", "2.3-PYTHON", "3.1-PYTHON", "3.2-PYTHON",
-    "3.1-FRONTEND-ANGULAR2X", "3.1-FRONTEND-ANGULARJS", "3.1-FRONTEND-REACT",
-    "3.2-FRONTEND-ANGULAR2X", "3.2-FRONTEND-ANGULARJS", "3.2-FRONTEND-REACT",
-    "3.3-FRONTEND-ANGULAR2X", "3.3-FRONTEND-REACT",
-    "4.1-FRONTEND-ANGULAR2X", "4.1-FRONTEND-REACT",
-    "4.2-FRONTEND-ANGULAR2X", "4.2-FRONTEND-REACT"
-  ],
-
-  // Engine Polling Interval
-  pollIntervalMs: 30000 // 30 seconds
-};
-```
-
----
-
-## 🚀 Cloud Operations & Management
-
-The system runs on an AWS EC2 instance managed by **PM2**:
-
-### 1. View Dashboard Securely (from your local Mac)
-Run the launcher script:
-```bash
-./open-dashboard.sh
-```
-This opens an encrypted tunnel and launches `http://localhost:3000` in your browser.
-
-### 2. Connect to the Cloud Server via SSH
-```bash
-ssh -i demand-automator-key.pem ec2-user@<YOUR_EC2_PUBLIC_IP>
-```
-
-### 3. Manage PM2 Background Services
-```bash
-# Check status of running services
-pm2 status
-
-# View live real-time automation logs
-pm2 logs prod-automator
-
-# View token auto-refresher logs
-pm2 logs renew-token
-
-# Restart all services
-pm2 restart all
-```
-
----
-
-## 🧪 Local Testing & Mock Mode
-
-To test changes offline without touching production APIs:
-
-1. **Start Mock Portal**:
-   ```bash
-   npm run mock:server
-   ```
-2. **Run Automation Worker against Mock Portal**:
-   ```bash
-   npm run worker:mock
-   ```
-3. Open `http://localhost:3000` to interact with simulated demands, test job injections, and inspect candidate submissions.
 
 ---
 
