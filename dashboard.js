@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { CONFIG, getRuntimeConfig, saveRuntimeConfig } from './config.js';
+import { sendTestNtfyNotification } from './ntfy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1241,75 +1242,79 @@ const HTML_CONTENT = `<!DOCTYPE html>
       }
     }
 
-    function openWhatsAppModal() {
-      const cfg = currentWhatsAppConfig || {};
-      document.getElementById("chkWhatsAppEnabled").checked = Boolean(cfg.enabled);
-      document.getElementById("inputWhatsAppPhone").value = cfg.phone || "";
-      document.getElementById("inputWhatsAppApiKey").value = cfg.apiKey || "";
-      document.getElementById("whatsappModal").classList.add("open");
+    function openNtfyModal() {
+      const cfg = (typeof currentNtfyConfig !== "undefined" && currentNtfyConfig) ? currentNtfyConfig : { enabled: false, topic: "" };
+      const chk = document.getElementById("chkNtfyEnabled");
+      const inp = document.getElementById("inputNtfyTopic");
+      const modal = document.getElementById("ntfyModal");
+      if (chk) chk.checked = Boolean(cfg.enabled);
+      if (inp) inp.value = cfg.topic || "";
+      if (modal) modal.classList.add("open");
     }
 
-    function closeWhatsAppModal() {
-      document.getElementById("whatsappModal").classList.remove("open");
+    function closeNtfyModal() {
+      const modal = document.getElementById("ntfyModal");
+      if (modal) modal.classList.remove("open");
     }
 
-    async function testWhatsAppMessage() {
-      const phone = document.getElementById("inputWhatsAppPhone").value.trim();
-      const apiKey = document.getElementById("inputWhatsAppApiKey").value.trim();
-      if (!phone || !apiKey) {
-        alert("Please enter both your phone number and CallMeBot API key.");
+    // Backward-compatibility aliases
+    function openWhatsAppModal() { openNtfyModal(); }
+    function closeWhatsAppModal() { closeNtfyModal(); }
+
+    async function testNtfyMessage() {
+      const inp = document.getElementById("inputNtfyTopic");
+      const topic = inp ? inp.value.trim() : "";
+      if (!topic) {
+        alert("Please enter a topic name for ntfy (e.g. pankaj-nagarro-alerts-99).");
         return;
       }
-      const btn = document.getElementById("btnTestWhatsApp");
-      btn.disabled = true;
-      btn.innerText = "Sending...";
+      const btn = document.getElementById("btnTestNtfy");
+      if (btn) { btn.disabled = true; btn.innerText = "Sending..."; }
       try {
-        const res = await fetch("/api/whatsapp/test", {
+        const res = await fetch("/api/ntfy/test", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone, apiKey })
+          body: JSON.stringify({ topic })
         });
         const data = await res.json();
         if (data.success) {
-          showToast("✅ WhatsApp test message delivered! Check your phone.");
+          showToast("✅ Test alert sent to ntfy.sh/" + topic + "! Check your phone.");
         } else {
-          showToast("Failed to send test: " + (data.error || "Check phone/API key"), true);
+          showToast("Failed to send test: " + (data.error || "Check topic name"), true);
         }
       } catch (e) {
         showToast("Error: " + e.message, true);
       } finally {
-        btn.disabled = false;
-        btn.innerText = "🧪 Send Test";
+        if (btn) { btn.disabled = false; btn.innerText = "🧪 Send Test"; }
       }
     }
 
-    async function saveWhatsAppSettings() {
-      const enabled = document.getElementById("chkWhatsAppEnabled").checked;
-      const phone = document.getElementById("inputWhatsAppPhone").value.trim();
-      const apiKey = document.getElementById("inputWhatsAppApiKey").value.trim();
+    async function saveNtfySettings() {
+      const chk = document.getElementById("chkNtfyEnabled");
+      const inp = document.getElementById("inputNtfyTopic");
+      const enabled = chk ? chk.checked : false;
+      const topic = inp ? inp.value.trim() : "";
 
-      const btn = document.getElementById("btnSaveWhatsApp");
-      btn.disabled = true;
-      btn.innerText = "Saving...";
+      const btn = document.getElementById("btnSaveNtfy");
+      if (btn) { btn.disabled = true; btn.innerText = "Saving..."; }
       try {
-        const res = await fetch("/api/config/whatsapp", {
+        const res = await fetch("/api/config/ntfy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ enabled, phone, apiKey })
+          body: JSON.stringify({ enabled, topic })
         });
         const data = await res.json();
         if (data.success) {
-          currentWhatsAppConfig = data.whatsapp;
-          showToast(enabled ? "✅ WhatsApp alerts ENABLED!" : "WhatsApp alerts saved.");
-          closeWhatsAppModal();
+          currentNtfyConfig = data.ntfy || { enabled, topic };
+          showToast(enabled ? "✅ Phone push alerts ENABLED!" : "Push alert settings saved.");
+          closeNtfyModal();
         } else {
-          showToast("Failed to save WhatsApp config", true);
+          showToast("Failed to save ntfy config", true);
         }
       } catch (e) {
         showToast("Error: " + e.message, true);
       } finally {
-        btn.disabled = false;
-        btn.innerText = "💾 Save Settings";
+        if (btn) { btn.disabled = false; btn.innerText = "💾 Save Settings"; }
       }
     }
 
@@ -1451,24 +1456,34 @@ const server = http.createServer(async (req, res) => {
 
   // POST /api/config/ntfy (and legacy /api/config/whatsapp)
   if ((pathname === "/api/config/ntfy" || pathname === "/api/config/whatsapp") && method === "POST") {
-    const body = await parseJsonBody(req);
-    const topic = (body.topic || body.apiKey || body.phone || "").trim();
-    const ntfy = {
-      enabled: Boolean(body.enabled),
-      topic: topic
-    };
-    const updated = saveRuntimeConfig({ ntfy, whatsapp: ntfy });
-    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-    return res.end(JSON.stringify({ success: true, ntfy: updated.ntfy, whatsapp: updated.whatsapp }));
+    try {
+      const body = await parseJsonBody(req);
+      const topic = (body.topic || body.apiKey || body.phone || "").trim();
+      const ntfy = {
+        enabled: Boolean(body.enabled),
+        topic: topic
+      };
+      const updated = saveRuntimeConfig({ ntfy, whatsapp: ntfy });
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      return res.end(JSON.stringify({ success: true, ntfy: updated.ntfy, whatsapp: updated.whatsapp }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      return res.end(JSON.stringify({ success: false, error: err.message }));
+    }
   }
 
   // POST /api/ntfy/test (and legacy /api/whatsapp/test)
   if ((pathname === "/api/ntfy/test" || pathname === "/api/whatsapp/test") && method === "POST") {
-    const body = await parseJsonBody(req);
-    const topic = (body.topic || body.apiKey || body.phone || "").trim();
-    const result = await sendTestNtfyNotification(topic);
-    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-    return res.end(JSON.stringify(result));
+    try {
+      const body = await parseJsonBody(req);
+      const topic = (body.topic || body.apiKey || body.phone || "").trim();
+      const result = await sendTestNtfyNotification(topic);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      return res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      return res.end(JSON.stringify({ success: false, error: err.message }));
+    }
   }
 
   // POST /api/token/update

@@ -42,7 +42,7 @@ export async function sendNtfyNotification(details) {
       timeStyle: "short"
     });
 
-    // Keep Title strictly ASCII for HTTP header compatibility
+    // Strictly ASCII title for HTTP headers
     const title = `Demand Applied: ${demandId} (${genus})`;
     const body = [
       `🎉 DEMAND AUTO-APPLIED!`,
@@ -59,13 +59,8 @@ export async function sendNtfyNotification(details) {
       `🌐 Portal: Nagarro Opportunistic Placement`
     ].join("\n");
 
-    return await executeNtfy(topic, title, body, [
-      {
-        action: "view",
-        label: "Open Portal",
-        url: "https://opportunistic-placement.azurewebsites.net/demands"
-      }
-    ]);
+    // No click URL, no external action buttons
+    return await executeNtfy(topic, title, body);
   } catch (err) {
     console.error("[ntfy] Error sending notification:", err.message);
     return { success: false, error: err.message };
@@ -82,7 +77,6 @@ export async function sendTestNtfyNotification(topic) {
   }
 
   const istTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-  // Strictly ASCII title for HTTP headers
   const title = "Nagarro Demand Automator Connected";
   const body = [
     "✅ ntfy push notifications are connected successfully!",
@@ -95,7 +89,7 @@ export async function sendTestNtfyNotification(topic) {
   return await executeNtfy(cleanTopic, title, body);
 }
 
-async function executeNtfy(topic, title, body, actions = []) {
+async function executeNtfy(topic, title, body) {
   const cleanTopic = encodeURIComponent(topic.trim().replace(/^https?:\/\/ntfy\.sh\//i, '').replace(/[^a-zA-Z0-9_-]/g, ''));
   if (!cleanTopic) {
     return { success: false, error: "Invalid topic name." };
@@ -109,13 +103,9 @@ async function executeNtfy(topic, title, body, actions = []) {
     const headers = {
       "Title": title,
       "Priority": "high",
-      "Tags": "tada,briefcase",
-      "Click": "https://opportunistic-placement.azurewebsites.net/demands"
+      "Tags": "tada,briefcase"
+      // Note: "Click" and "Actions" intentionally omitted so tapping the notification does not navigate anywhere
     };
-
-    if (actions && actions.length > 0) {
-      headers["Actions"] = JSON.stringify(actions);
-    }
 
     const res = await fetch(url, {
       method: "POST",
