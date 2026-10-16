@@ -8,7 +8,7 @@ import { evaluateDemand } from "./classifier.js";
 import { generateCandidatePitch } from "./ai-pitch-generator.js";
 import { refreshAccessToken } from "./renew-token.js";
 import { runHeadlessRenewal } from "./renew-session-headless.js";
-import { sendWhatsAppNotification } from "./whatsapp.js";
+import { sendNtfyNotification } from "./ntfy.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -502,8 +502,8 @@ export class DemandAutomationEngine {
       saveEngineStats(this.stats);
       this.log("SUCCESS", `🎉 APPLIED to ${demandId} (${demand.genus})! Skills checked: ${checkedSkills.length}. AI pitch submitted.`);
 
-      // WhatsApp Notification (non-blocking, failsafe)
-      sendWhatsAppNotification({
+      // Instant Push Notification (non-blocking, failsafe)
+      sendNtfyNotification({
         demandId,
         genus: demand.genus,
         location: demand.location,
@@ -511,7 +511,7 @@ export class DemandAutomationEngine {
         pitch: aiPitch
       }).then(res => {
         if (res && res.success) {
-          this.log("INFO", `📲 WhatsApp alert dispatched for Demand ${demandId}.`);
+          this.log("INFO", `🔔 Push notification dispatched to ntfy for Demand ${demandId}.`);
         }
       }).catch(() => {});
 

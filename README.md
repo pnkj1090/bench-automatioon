@@ -2,7 +2,7 @@
 
 An enterprise-grade, autonomous cloud monitoring and candidate placement suite for the Nagarro Opportunistic Placement portal (`https://opportunistic-placement.azurewebsites.net/demands`).
 
-Built to run 24/7 on AWS EC2 with autonomous Azure AD session renewal, business-hours scheduling, intelligent role classification, dynamic pitch generation, WhatsApp notifications, and an encrypted zero-exposure management dashboard.
+Built to run 24/7 on AWS EC2 with autonomous Azure AD session renewal, business-hours scheduling, intelligent role classification, dynamic pitch generation, instant mobile push alerts (ntfy.sh), and an encrypted zero-exposure management dashboard.
 
 ---
 
@@ -32,8 +32,9 @@ Evaluates opportunities against candidate skills and genus levels:
 - **Skill Checklist**: Automatically verifies and checks 100% of required must-have skills on the application modal.
 - **Resume Submission**: Direct multi-part form attachment of authentic `.docx` resume.
 
-### 5. 📱 Real-Time WhatsApp Alerts (`whatsapp.js`)
-- Integrates with CallMeBot to send instant alerts whenever an eligible demand is auto-applied.
+### 5. 🔔 Instant Mobile Push Alerts (`ntfy.js`)
+- Integrates with [ntfy.sh](https://ntfy.sh) to send instant push notifications directly to your phone lock screen with sound whenever an eligible demand is auto-applied.
+- Zero signup, zero API keys, 100% free forever.
 - Configurable directly from the web dashboard.
 
 ### 6. 🔒 Zero-Exposure Security Model
@@ -166,10 +167,10 @@ sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -
    ./open-dashboard.sh
    ```
    This creates an encrypted SSH tunnel and opens `http://localhost:3000` in your browser.
-2. (Optional) To enable WhatsApp alerts:
-   - Click **WhatsApp Notifications** in the top navigation.
-   - Enter your phone number and free [CallMeBot](https://www.callmebot.com/) API key.
-   - Click **Send Test Alert** & **Save Settings**.
+2. (Optional) To enable Mobile Push Alerts:
+   - Click **🔔 Push Alerts** in the top navigation.
+   - Enter any unique topic name (e.g. `pankaj-nagarro-alerts`).
+   - Open the free **ntfy** app on your phone, subscribe to the same topic, and tap **Send Test**.
 
 ---
 
@@ -201,7 +202,8 @@ Running continuously on AWS in `ap-south-1` (Mumbai):
 ├── dashboard.js              # Private monitoring dashboard server (localhost:3000)
 ├── classifier.js             # Intelligent role classification (Frontend vs Python)
 ├── ai-pitch-generator.js     # Context-aware candidate pitch synthesis
-├── whatsapp.js               # CallMeBot WhatsApp alert integration
+├── ntfy.js                   # Instant mobile push alert integration (ntfy.sh)
+├── whatsapp.js               # Backward-compatible proxy to ntfy.js
 ├── open-dashboard.sh         # One-click SSH tunnel to access cloud dashboard locally
 ├── deploy-to-aws.js          # Automated EC2 provisioner and deployment orchestrator
 ├── ecosystem.config.cjs      # PM2 process configuration for production

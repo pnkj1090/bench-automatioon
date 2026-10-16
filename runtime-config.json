@@ -1,5 +1,9 @@
 {
   "pollIntervalSeconds": 30,
   "autoStandby": false,
-  "standbyOverride": true
+  "standbyOverride": true,
+  "ntfy": {
+    "enabled": false,
+    "topic": ""
+  }
 }

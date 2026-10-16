@@ -386,6 +386,12 @@ const HTML_CONTENT = `<!DOCTYPE html>
       color: #34d399;
     }
     .btn-history:hover { background: rgba(16, 185, 129, 0.22); }
+    .btn-ntfy {
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.35);
+      color: #60a5fa;
+    }
+    .btn-ntfy:hover { background: rgba(59, 130, 246, 0.22); color: #fff; }
     .btn-whatsapp {
       background: rgba(37, 211, 102, 0.12);
       border-color: rgba(37, 211, 102, 0.3);
@@ -662,9 +668,9 @@ const HTML_CONTENT = `<!DOCTYPE html>
           🔔 Sound: ON
         </button>
 
-        <!-- WhatsApp Setup -->
-        <button class="btn btn-whatsapp" onclick="openWhatsAppModal()" title="Configure instant WhatsApp alerts when demands are auto-applied">
-          📲 WhatsApp
+        <!-- Push Alerts Setup -->
+        <button class="btn btn-ntfy" onclick="openNtfyModal()" title="Configure instant phone push alerts via ntfy.sh">
+          🔔 Push Alerts
         </button>
 
         <button id="btnPauseResume" class="btn btn-pause" onclick="togglePauseResume()">
@@ -777,41 +783,39 @@ const HTML_CONTENT = `<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- WhatsApp Notification Modal -->
-  <div id="whatsappModal" class="modal-overlay" onclick="if(event.target===this) closeWhatsAppModal()">
-    <div class="modal-box" style="max-width: 480px;">
-      <h2 class="modal-title">📲 WhatsApp Auto-Apply Alerts</h2>
-      <p class="modal-desc">Get an instant WhatsApp notification with full demand details and AI pitch whenever a job is auto-applied via free CallMeBot API.</p>
+  <!-- ntfy Push Notification Modal -->
+  <div id="ntfyModal" class="modal-overlay" onclick="if(event.target===this) closeNtfyModal()">
+    <div class="modal-box" style="max-width: 490px;">
+      <h2 class="modal-title">🔔 Phone Push Alerts (ntfy.sh)</h2>
+      <p class="modal-desc">Receive instant push notifications with sound directly on your phone lock screen whenever a job is auto-applied.</p>
       
       <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-        <span style="font-size: 13px; font-weight: 600;">Enable WhatsApp Alerts:</span>
+        <span style="font-size: 13px; font-weight: 600;">Enable Phone Push Alerts:</span>
         <label style="position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="chkWhatsAppEnabled" style="width: 18px; height: 18px; cursor: pointer; accent-color: #25d366;">
+          <input type="checkbox" id="chkNtfyEnabled" style="width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6;">
           <span style="font-size: 12px; color: var(--text-muted);">Active</span>
         </label>
       </div>
 
-      <div style="margin-bottom: 10px;">
-        <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">WhatsApp Number (with country code):</label>
-        <input type="text" id="inputWhatsAppPhone" class="interval-input" style="width: 100%; box-sizing: border-box; text-align: left; padding: 6px 10px; font-size: 13px;" placeholder="+919876543210">
-      </div>
-
       <div style="margin-bottom: 12px;">
-        <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">CallMeBot API Key:</label>
-        <input type="text" id="inputWhatsAppApiKey" class="interval-input" style="width: 100%; box-sizing: border-box; text-align: left; padding: 6px 10px; font-size: 13px;" placeholder="e.g. 123456">
+        <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Your Private Topic Name:</label>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 12px; color: var(--text-muted); font-family: monospace;">ntfy.sh/</span>
+          <input type="text" id="inputNtfyTopic" class="interval-input" style="flex: 1; box-sizing: border-box; text-align: left; padding: 7px 10px; font-size: 13px;" placeholder="e.g. pankaj-nagarro-alerts-99">
+        </div>
       </div>
 
-      <div style="background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.25); border-radius: 6px; padding: 8px 10px; font-size: 11px; line-height: 1.4; color: #93c5fd; margin-bottom: 14px;">
-        💡 <b>How to get your free CallMeBot API key (takes 30 seconds):</b><br>
-        1. Save <b>+34 644 68 83 34</b> to your phone contacts as <i>CallMeBot</i>.<br>
-        2. Send WhatsApp message: <code>I allow callmebot to send me messages</code><br>
-        3. Copy the apiKey from their reply and paste it here.
+      <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 11px; line-height: 1.5; color: #93c5fd; margin-bottom: 16px;">
+        🚀 <b>How to get alerts on your phone (takes 30 seconds):</b><br>
+        1. Install the free <b>ntfy</b> app on your phone (<a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" style="color:#60a5fa;text-decoration:underline;">Android</a> / <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" style="color:#60a5fa;text-decoration:underline;">iOS</a>).<br>
+        2. Open the app, tap <b>+</b> (Subscribe), and enter your chosen topic name above.<br>
+        3. Click <b>🧪 Send Test</b> below to verify the alert rings on your phone!
       </div>
 
       <div class="modal-actions" style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button class="btn btn-outline" onclick="closeWhatsAppModal()">Close</button>
-        <button class="btn btn-outline" style="border-color: rgba(37, 211, 102, 0.4); color: #25d366;" onclick="testWhatsAppMessage()" id="btnTestWhatsApp">🧪 Send Test</button>
-        <button class="btn btn-token" style="background: linear-gradient(135deg, #059669, #10b981);" onclick="saveWhatsAppSettings()" id="btnSaveWhatsApp">💾 Save Settings</button>
+        <button class="btn btn-outline" onclick="closeNtfyModal()">Close</button>
+        <button class="btn btn-outline" style="border-color: rgba(59, 130, 246, 0.4); color: #60a5fa;" onclick="testNtfyMessage()" id="btnTestNtfy">🧪 Send Test</button>
+        <button class="btn btn-token" style="background: linear-gradient(135deg, #2563eb, #3b82f6);" onclick="saveNtfySettings()" id="btnSaveNtfy">💾 Save Settings</button>
       </div>
     </div>
   </div>
@@ -842,7 +846,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
     let previousAppliedCount = 0;
     let soundEnabled = localStorage.getItem('soundAlerts') !== 'false';
     let appliedHistoryData = [];
-    let currentWhatsAppConfig = { enabled: false, phone: "", apiKey: "" };
+    let currentNtfyConfig = { enabled: false, topic: "" };
 
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
@@ -1049,8 +1053,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
             : !Boolean(data.runtimeConfig.standbyOverride);
           isOverrideActive = !isAutoStandby;
           currentInterval = data.runtimeConfig.pollIntervalSeconds || 30;
-          if (data.runtimeConfig.whatsapp) {
-            currentWhatsAppConfig = data.runtimeConfig.whatsapp;
+          if (data.runtimeConfig.ntfy) {
+            currentNtfyConfig = data.runtimeConfig.ntfy;
+          } else if (data.runtimeConfig.whatsapp) {
+            currentNtfyConfig = { enabled: data.runtimeConfig.whatsapp.enabled, topic: data.runtimeConfig.whatsapp.topic || "" };
           }
 
           const inputInt = document.getElementById('inputInterval');
@@ -1443,25 +1449,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // POST /api/config/whatsapp
-  if (pathname === "/api/config/whatsapp" && method === "POST") {
+  // POST /api/config/ntfy (and legacy /api/config/whatsapp)
+  if ((pathname === "/api/config/ntfy" || pathname === "/api/config/whatsapp") && method === "POST") {
     const body = await parseJsonBody(req);
-    const whatsapp = {
+    const topic = (body.topic || body.apiKey || body.phone || "").trim();
+    const ntfy = {
       enabled: Boolean(body.enabled),
-      phone: (body.phone || "").trim(),
-      apiKey: (body.apiKey || "").trim()
+      topic: topic
     };
-    const updated = saveRuntimeConfig({ whatsapp });
+    const updated = saveRuntimeConfig({ ntfy, whatsapp: ntfy });
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-    return res.end(JSON.stringify({ success: true, whatsapp: updated.whatsapp }));
+    return res.end(JSON.stringify({ success: true, ntfy: updated.ntfy, whatsapp: updated.whatsapp }));
   }
 
-  // POST /api/whatsapp/test
-  if (pathname === "/api/whatsapp/test" && method === "POST") {
+  // POST /api/ntfy/test (and legacy /api/whatsapp/test)
+  if ((pathname === "/api/ntfy/test" || pathname === "/api/whatsapp/test") && method === "POST") {
     const body = await parseJsonBody(req);
-    const phone = (body.phone || "").trim();
-    const apiKey = (body.apiKey || "").trim();
-    const result = await sendTestWhatsAppMessage(phone, apiKey);
+    const topic = (body.topic || body.apiKey || body.phone || "").trim();
+    const result = await sendTestNtfyNotification(topic);
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
     return res.end(JSON.stringify(result));
   }
