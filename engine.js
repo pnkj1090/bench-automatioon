@@ -70,6 +70,8 @@ export class DemandAutomationEngine {
     this.maxLogs = 200;
     this.onLogCallback = options.onLog || null;
     this.lastStandbyLogged = 0;
+    this.consecutiveAuthFailures = 0;
+    this.lastTokenAlertTime = 0;
 
     const storedStats = getStoredStats() || {};
     this.stats = {
@@ -156,7 +158,14 @@ export class DemandAutomationEngine {
     if (this.logs.length > this.maxLogs) {
       this.logs.pop();
     }
-    console.log(`[${entry.timestamp.split("T")[1].split(".")[0]}] [${level}] ${message}`);
+    const istTimeStr = new Date().toLocaleTimeString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+    console.log(`[${istTimeStr}] [${level}] ${message}`);
     if (this.onLogCallback) {
       try {
         this.onLogCallback(entry);
@@ -167,10 +176,54 @@ export class DemandAutomationEngine {
     return entry;
   }
 
+  async notifyTokenExpired() {
+    const now = Date.now();
+    // Rate-limit alert to once every 2 hours to avoid spamming
+    if (this.lastTokenAlertTime && (now - this.lastTokenAlertTime < 2 * 60 * 60 * 1000)) {
+      return;
+    }
+    this.lastTokenAlertTime = now;
+
+    try {
+      const runtime = getRuntimeConfig();
+      const topic = (runtime.ntfy?.topic || runtime.whatsapp?.topic || "bench-bot-3177277").trim();
+      const cleanTopic = encodeURIComponent(topic.replace(/^https?:\/\/ntfy\.sh\//i, '').replace(/[^a-zA-Z0-9_-]/g, ''));
+      if (!cleanTopic) return;
+
+      const istTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+      await fetch(`https://ntfy.sh/${cleanTopic}`, {
+        method: "POST",
+        headers: {
+          "Title": "Action Required: Azure SSO Token Expired",
+          "Priority": "urgent",
+          "Tags": "warning,key"
+        },
+        body: [
+          "⚠️ AUTOMATOR ENTERED SAFE STANDBY",
+          "",
+          "Your 24-hour Microsoft SSO portal token has expired.",
+          "The automator has paused rapid scanning to protect your AWS server.",
+          "",
+          "👉 Open the Web Dashboard to paste a fresh token and resume auto-applying.",
+          "",
+          `🕒 ${istTime} IST`
+        ].join("\n")
+      });
+      this.log("INFO", "🚨 Emergency token expiration alert dispatched to phone via ntfy!");
+    } catch (e) {
+      this.log("WARN", "Could not send token expiration alert: " + e.message);
+    }
+  }
+
   scheduleNextTick() {
     if (!this.isRunning) return;
     const runtime = getRuntimeConfig();
-    const baseSec = runtime.pollIntervalSeconds || Math.round(this.intervalMs / 1000) || 30;
+    let baseSec = runtime.pollIntervalSeconds || Math.round(this.intervalMs / 1000) || 30;
+
+    // Circuit Breaker: throttle to 15 min if token is expired to protect server resources
+    if (this.consecutiveAuthFailures >= 2) {
+      baseSec = 900;
+    }
 
     // Human jitter: between -3.0s and +3.0s (proportional if baseSec < 15s)
     const maxJitter = Math.min(3, Math.max(1, Math.round(baseSec * 0.15)));
@@ -281,18 +334,35 @@ export class DemandAutomationEngine {
     let response = await fetch(url, { ...options, headers });
     this.stats.lastLatencyMs = Date.now() - startFetch;
 
-    // Handle 401 Unauthorized via autonomous refresh token exchange
-    if (response.status === 401 && this.hasRefreshToken()) {
-      this.log("WARN", "Received HTTP 401 Unauthorized. Attempting autonomous token refresh...");
-      const renew = await refreshAccessToken();
-      if (renew.success) {
-        this.log("SUCCESS", `Token automatically refreshed via Azure AD! Retrying request...`);
-        token = this.getAuthToken();
-        headers["Authorization"] = `Bearer ${token}`;
-        response = await fetch(url, { ...options, headers });
-      } else {
-        this.log("ERROR", `Autonomous token refresh failed: ${renew.error}`);
-        // Fallback: Autonomous Headless Browser Session Renewal
+    // Handle 401 Unauthorized with Circuit Breaker
+    if (response.status === 401) {
+      this.consecutiveAuthFailures = (this.consecutiveAuthFailures || 0) + 1;
+      this.log("WARN", `Received HTTP 401 Unauthorized (Auth failure count: ${this.consecutiveAuthFailures}). Attempting recovery...`);
+
+      if (this.consecutiveAuthFailures > 2) {
+        await this.notifyTokenExpired();
+        return response;
+      }
+
+      let refreshed = false;
+      if (this.hasRefreshToken()) {
+        const renew = await refreshAccessToken();
+        if (renew.success) {
+          this.log("SUCCESS", `Token automatically refreshed via Azure AD! Retrying request...`);
+          token = this.getAuthToken();
+          headers["Authorization"] = `Bearer ${token}`;
+          response = await fetch(url, { ...options, headers });
+          if (response.status !== 401) {
+            this.consecutiveAuthFailures = 0;
+            refreshed = true;
+          }
+        } else {
+          this.log("ERROR", `Autonomous token refresh failed: ${renew.error}`);
+        }
+      }
+
+      if (!refreshed) {
+        // Fallback: Autonomous Headless Browser Session Renewal (at most once)
         try {
           this.log("INFO", "Triggering autonomous headless browser session renewal...");
           const headlessRes = await runHeadlessRenewal();
@@ -301,6 +371,10 @@ export class DemandAutomationEngine {
             token = this.getAuthToken();
             headers["Authorization"] = `Bearer ${token}`;
             response = await fetch(url, { ...options, headers });
+            if (response.status !== 401) {
+              this.consecutiveAuthFailures = 0;
+              refreshed = true;
+            }
           } else {
             this.log("ERROR", `Headless session renewal failed: ${headlessRes.error}`);
           }
@@ -308,6 +382,13 @@ export class DemandAutomationEngine {
           this.log("ERROR", `Error invoking headless session renewal: ${hErr.message}`);
         }
       }
+
+      if (response.status === 401 && this.consecutiveAuthFailures >= 2) {
+        this.log("STANDBY", "Continuous 401 Unauthorized: entering Safe Standby Mode (15m interval) to protect server.");
+        await this.notifyTokenExpired();
+      }
+    } else if (response.ok) {
+      this.consecutiveAuthFailures = 0;
     }
 
     return response;

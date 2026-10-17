@@ -30,7 +30,9 @@ export async function runHeadlessRenewal() {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--single-process'
+        '--single-process',
+        '--disable-breakpad',
+        '--disable-crash-reporter'
       ]
     });
 
@@ -42,94 +44,102 @@ export async function runHeadlessRenewal() {
     const page = await context.newPage();
     console.log(`[${timestamp}] 🌐 [HEADLESS RENEWER] Navigating to ${TARGET_URL}...`);
 
-    await page.goto(TARGET_URL, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.goto(TARGET_URL, { waitUntil: 'load', timeout: 35000 });
 
-    // Wait up to 15 seconds for MSAL to refresh and populate sessionStorage
-    console.log(`[${timestamp}] ⏳ [HEADLESS RENEWER] Waiting for MSAL sessionStorage tokens...`);
+    // Wait up to 20 seconds for MSAL to complete silent iframe code exchange and acquire a fresh token
+    console.log(`[${timestamp}] ⏳ [HEADLESS RENEWER] Waiting for MSAL silent iframe renewal...`);
     let extractedTokens = null;
 
-    for (let attempt = 0; attempt < 15; attempt++) {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await page.waitForTimeout(1000);
+
       extractedTokens = await page.evaluate(() => {
         let refreshToken = null;
         let accessToken = null;
+        let exp = 0;
 
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          const val = sessionStorage.getItem(key);
+        // Check localStorage where MSAL stores credentials
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          const val = localStorage.getItem(key);
           if (!val) continue;
 
           try {
             const parsed = JSON.parse(val);
+            if (parsed.credentialType === 'AccessToken') {
+              const tokenExp = Number(parsed.expiresOn) || 0;
+              // Crucial: Only accept tokens that are fresh (expire in the future)
+              if (tokenExp * 1000 > Date.now() + 60000) {
+                accessToken = parsed.secret;
+                exp = tokenExp;
+              }
+            }
             if (parsed.credentialType === 'RefreshToken' && parsed.secret) {
               refreshToken = parsed.secret;
-            } else if (parsed.credentialType === 'AccessToken' && parsed.secret) {
-              accessToken = parsed.secret;
             }
           } catch (e) {}
         }
 
-        // Also check localStorage in case MSAL caching location differs
-        if (!refreshToken || !accessToken) {
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            const val = localStorage.getItem(key);
+        // Also check sessionStorage
+        if (!accessToken) {
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            const val = sessionStorage.getItem(key);
             if (!val) continue;
 
             try {
               const parsed = JSON.parse(val);
+              if (parsed.credentialType === 'AccessToken') {
+                const tokenExp = Number(parsed.expiresOn) || 0;
+                if (tokenExp * 1000 > Date.now() + 60000) {
+                  accessToken = parsed.secret;
+                  exp = tokenExp;
+                }
+              }
               if (parsed.credentialType === 'RefreshToken' && parsed.secret) {
                 refreshToken = parsed.secret;
-              } else if (parsed.credentialType === 'AccessToken' && parsed.secret) {
-                accessToken = parsed.secret;
               }
             } catch (e) {}
           }
         }
 
-        return { refreshToken, accessToken };
+        return { refreshToken, accessToken, exp };
       });
 
-      if (extractedTokens && extractedTokens.refreshToken && extractedTokens.accessToken) {
+      if (extractedTokens && extractedTokens.accessToken) {
         break;
       }
-      await page.waitForTimeout(1000);
     }
 
-    if (!extractedTokens || !extractedTokens.refreshToken || !extractedTokens.accessToken) {
+    if (!extractedTokens || !extractedTokens.accessToken) {
       const currentUrl = page.url();
-      console.error(`[${timestamp}] ❌ [HEADLESS RENEWER] Could not extract MSAL tokens. Current URL: ${currentUrl}`);
+      console.error(`[${timestamp}] ❌ [HEADLESS RENEWER] Could not extract fresh MSAL tokens. Current URL: ${currentUrl}`);
       await browser.close();
       return { 
         success: false, 
-        error: `MSAL tokens not found in storage. Current URL: ${currentUrl}` 
+        error: `MSAL tokens not found or Microsoft SSO session expired. Current URL: ${currentUrl}` 
       };
     }
 
-    console.log(`[${timestamp}] ✅ [HEADLESS RENEWER] Successfully extracted fresh MSAL tokens!`);
+    console.log(`[${timestamp}] ✅ [HEADLESS RENEWER] Successfully extracted fresh MSAL tokens (Expires: ${new Date(extractedTokens.exp * 1000).toISOString()})!`);
 
     // Save tokens with secure file permissions
     fs.writeFileSync(TOKEN_FILE, extractedTokens.accessToken, { encoding: 'utf8', mode: 0o600 });
-    fs.writeFileSync(REFRESH_TOKEN_FILE, extractedTokens.refreshToken, { encoding: 'utf8', mode: 0o600 });
+    if (extractedTokens.refreshToken) {
+      fs.writeFileSync(REFRESH_TOKEN_FILE, extractedTokens.refreshToken, { encoding: 'utf8', mode: 0o600 });
+    }
 
-    // Update auth-state.json with renewed cookies
+    // Update auth-state.json with renewed session cookies
     await context.storageState({ path: AUTH_STATE_FILE });
     console.log(`[${timestamp}] 💾 [HEADLESS RENEWER] Updated ${AUTH_STATE_FILE} with latest session state.`);
 
     await browser.close();
 
-    // Signal or restart prod-automator so it loads new token
-    exec('pm2 restart prod-automator', (err) => {
-      if (err) {
-        console.warn(`[${timestamp}] ⚠️ [HEADLESS RENEWER] PM2 restart warning: ${err.message}`);
-      } else {
-        console.log(`[${timestamp}] 🚀 [HEADLESS RENEWER] prod-automator restarted with fresh token.`);
-      }
-    });
-
     return {
       success: true,
       timestamp: new Date().toISOString(),
-      refreshTokenPreview: extractedTokens.refreshToken.slice(0, 15) + '...',
+      expiresAt: new Date(extractedTokens.exp * 1000).toISOString(),
+      refreshTokenPreview: extractedTokens.refreshToken ? extractedTokens.refreshToken.slice(0, 15) + '...' : 'unchanged',
       accessTokenPreview: extractedTokens.accessToken.slice(0, 15) + '...'
     };
   } catch (err) {
@@ -145,6 +155,10 @@ export async function runHeadlessRenewal() {
 if (process.argv[1] && process.argv[1].endsWith('renew-session-headless.js')) {
   runHeadlessRenewal().then(result => {
     console.log('[HEADLESS RENEWER RESULT]', JSON.stringify(result, null, 2));
-    process.exit(result.success ? 0 : 1);
+    if (result.success) {
+      exec('pm2 restart prod-automator', () => process.exit(0));
+    } else {
+      process.exit(1);
+    }
   });
 }

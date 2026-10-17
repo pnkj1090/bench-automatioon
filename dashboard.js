@@ -826,6 +826,15 @@ const HTML_CONTENT = `<!DOCTYPE html>
     <div class="modal-box">
       <h2 class="modal-title">🔑 Update Azure AD / Refresh Token</h2>
       <p class="modal-desc">Paste your fresh Microsoft Entra ID Refresh Token (recommended for 24/7 autonomous renewal) or Bearer Access Token.</p>
+      
+      <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 11px; line-height: 1.5; color: #93c5fd; margin-bottom: 12px;">
+        💡 <b>Instant Token Copy (from portal in Chrome/Edge):</b><br>
+        1. Open <a href="https://opportunistic-placement.azurewebsites.net/demands" target="_blank" style="color: #60a5fa; text-decoration: underline;">Opportunistic Placement Portal</a><br>
+        2. Press <b>F12</b> (or Cmd+Option+I), switch to <b>Console</b> tab, paste this one-liner and press Enter:<br>
+        <code style="display: block; margin-top: 4px; background: rgba(0,0,0,0.4); padding: 5px 8px; border-radius: 4px; color: #34d399; font-family: monospace; user-select: all; word-break: break-all;">copy((JSON.parse(sessionStorage.getItem(Object.keys(sessionStorage).find(k=>k.includes('refreshtoken')))||sessionStorage.getItem(Object.keys(sessionStorage).find(k=>k.includes('accesstoken'))))).secret)</code>
+        3. Paste below and click <b>Save</b>!
+      </div>
+
       <textarea id="tokenInput" class="token-textarea" placeholder="Paste token here (starts with '0.A...' or 'eyJ...')..."></textarea>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeTokenModal()">Cancel</button>
