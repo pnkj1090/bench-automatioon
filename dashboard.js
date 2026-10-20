@@ -484,6 +484,37 @@ const HTML_CONTENT = `<!DOCTYPE html>
       border-radius: 10px;
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
       overflow: hidden;
+      position: relative;
+    }
+    .scroll-bottom-btn {
+      position: absolute;
+      bottom: 12px;
+      right: 18px;
+      background: rgba(37, 99, 235, 0.9);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 9999px;
+      padding: 4px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(6px);
+      transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s;
+      z-index: 10;
+    }
+    .scroll-bottom-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+    .scroll-bottom-btn:hover {
+      background: #1d4ed8;
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
     }
     .terminal-header {
       background: rgba(255, 255, 255, 0.03);
@@ -497,9 +528,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
     .dot-red { background: #ff5f56; }
     .dot-yellow { background: #ffbd2e; }
     .dot-green { background: #27c93f; }
-    .terminal-title {
-      font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); font-weight: 600;
-    }
+    .terminal-title { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); font-weight: 600; }
     .terminal-meta {
       font-size: 10px; font-family: var(--font-mono); color: #60a5fa;
     }
@@ -757,9 +786,12 @@ const HTML_CONTENT = `<!DOCTYPE html>
         <div class="terminal-title">LIVE CLOUD TELEMETRY • AWS EC2 (Mumbai ap-south-1)</div>
         <div id="terminalMeta" class="terminal-meta">PM2 PID: -- • Mon-Fri (8AM-8PM IST)</div>
       </div>
-      <div id="terminalLogs" class="terminal-body">
+      <div id="terminalLogs" class="terminal-body" onscroll="handleTerminalScroll()">
         <div class="log-line info">Connecting to AWS cloud logs...</div>
       </div>
+      <button id="btnScrollToBottom" class="scroll-bottom-btn" onclick="scrollTerminalToBottom()" title="Jump to latest logs">
+        ↓ Jump to Latest
+      </button>
     </div>
 
   </div>
@@ -857,6 +889,28 @@ const HTML_CONTENT = `<!DOCTYPE html>
     let soundEnabled = localStorage.getItem('soundAlerts') !== 'false';
     let appliedHistoryData = [];
     let currentNtfyConfig = { enabled: false, topic: "" };
+    let previousLogsHtml = '';
+
+    function handleTerminalScroll() {
+      const term = document.getElementById('terminalLogs');
+      const btn = document.getElementById('btnScrollToBottom');
+      if (!term || !btn) return;
+      const isScrolledUp = (term.scrollHeight - term.scrollTop - term.clientHeight) > 50;
+      if (isScrolledUp) {
+        btn.classList.add('visible');
+      } else {
+        btn.classList.remove('visible');
+      }
+    }
+
+    function scrollTerminalToBottom() {
+      const term = document.getElementById('terminalLogs');
+      const btn = document.getElementById('btnScrollToBottom');
+      if (term) {
+        term.scrollTo({ top: term.scrollHeight, behavior: 'smooth' });
+      }
+      if (btn) btn.classList.remove('visible');
+    }
 
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
@@ -1128,10 +1182,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
           document.getElementById('valLastScan').innerText = 'Last: ' + lastTimeStr;
         }
 
-        // Logs
+        // Logs (Smart Auto-Scroll)
         const term = document.getElementById('terminalLogs');
         if (data.logs && data.logs.length) {
-          term.innerHTML = data.logs.map(line => {
+          const newHtml = data.logs.map(line => {
             let cls = 'info';
             if (line.includes('[STANDBY]')) cls = 'standby';
             else if (line.includes('[SKIP]')) cls = 'skip';
@@ -1140,7 +1194,25 @@ const HTML_CONTENT = `<!DOCTYPE html>
             else if (line.includes('[ERROR]') || line.includes('Error')) cls = 'error';
             return '<div class="log-line ' + cls + '">' + escapeHtml(line) + '</div>';
           }).join('');
-          term.scrollTop = term.scrollHeight;
+
+          // Only update DOM if log content actually changed
+          if (newHtml !== previousLogsHtml) {
+            // Check if user is scrolled to (or within 50px of) the bottom before update
+            const isAtBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 50 || !previousLogsHtml;
+            const prevScrollTop = term.scrollTop;
+            const prevScrollHeight = term.scrollHeight;
+
+            term.innerHTML = newHtml;
+            previousLogsHtml = newHtml;
+
+            if (isAtBottom) {
+              term.scrollTop = term.scrollHeight;
+            } else {
+              // Maintain exact scroll position relative to content so reading is never interrupted
+              term.scrollTop = prevScrollTop + (term.scrollHeight - prevScrollHeight);
+            }
+            handleTerminalScroll();
+          }
         }
 
       } catch (e) {
