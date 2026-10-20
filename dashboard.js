@@ -1474,7 +1474,7 @@ const server = http.createServer(async (req, res) => {
     const storedToken = getStoredToken();
     const token = parseJwt(storedToken);
     const hasRefresh = hasRefreshToken();
-    const logs = getLogLines(LOG_FILE, 70);
+    const logs = getLogLines(LOG_FILE, 500); // Past ~1 hour of daemon runs
     const storedStats = getStoredStats();
     const stats = storedStats || parseStatsFromLogs(logs);
     const runtimeConfig = getRuntimeConfig();
