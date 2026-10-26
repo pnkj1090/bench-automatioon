@@ -1,0 +1,91 @@
+{
+  "amount": "7.17",
+  "exactAmount": "7.1728",
+  "netAmount": "7.17",
+  "unit": "USD",
+  "period": "Oct 1 - 26, 2026",
+  "monthName": "October 2026",
+  "services": [
+    {
+      "service": "Amazon Elastic Compute Cloud - Compute",
+      "amount": 3.3722453296,
+      "netAmount": 3.3722453296,
+      "unit": "USD"
+    },
+    {
+      "service": "Amazon Virtual Private Cloud",
+      "amount": 1.524086115,
+      "netAmount": 1.524086115,
+      "unit": "USD"
+    },
+    {
+      "service": "Tax",
+      "amount": 1.09,
+      "netAmount": 1.09,
+      "unit": "USD"
+    },
+    {
+      "service": "Amazon Relational Database Service",
+      "amount": 0.8407742769,
+      "netAmount": 0.8407742775,
+      "unit": "USD"
+    },
+    {
+      "service": "EC2 - Other",
+      "amount": 0.2955485106,
+      "netAmount": 0.295548511,
+      "unit": "USD"
+    },
+    {
+      "service": "AWS Cost Explorer",
+      "amount": 0.03,
+      "netAmount": 0.03,
+      "unit": "USD"
+    },
+    {
+      "service": "AWS Secrets Manager",
+      "amount": 0.0190087478,
+      "netAmount": 0.0190087478,
+      "unit": "USD"
+    },
+    {
+      "service": "Amazon Simple Storage Service",
+      "amount": 0.0008510401,
+      "netAmount": 0.0008510401,
+      "unit": "USD"
+    },
+    {
+      "service": "AWS Amplify",
+      "amount": 0.0001686333,
+      "netAmount": 0.0001686337,
+      "unit": "USD"
+    },
+    {
+      "service": "AWS CloudShell",
+      "amount": 0.0001037298,
+      "netAmount": 0.0001037298,
+      "unit": "USD"
+    },
+    {
+      "service": "AmazonCloudWatch",
+      "amount": 0.00004,
+      "netAmount": 0.00004,
+      "unit": "USD"
+    },
+    {
+      "service": "Amazon DynamoDB",
+      "amount": 0.0000030131,
+      "netAmount": 0.0000030131,
+      "unit": "USD"
+    },
+    {
+      "service": "Amazon CloudFront",
+      "amount": 8.224e-7,
+      "netAmount": 8.224e-7,
+      "unit": "USD"
+    }
+  ],
+  "updatedAt": "2026-10-26T19:28:16.345Z",
+  "updatedAtFormatted": "27 Oct, 12:58 am IST",
+  "estimated": true
+}

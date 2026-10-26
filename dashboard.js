@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { CONFIG, getRuntimeConfig, saveRuntimeConfig } from './config.js';
 import { sendTestNtfyNotification } from './ntfy.js';
+import { getCachedAwsBill, fetchLatestAwsBill } from './aws-billing.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -467,6 +468,152 @@ const HTML_CONTENT = `<!DOCTYPE html>
       gap: 8px;
       flex-shrink: 0;
     }
+    .metrics-row.desktop-only {
+      grid-template-columns: repeat(5, 1fr);
+    }
+    .metric-cost-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .metric-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .bill-badge-mtd {
+      font-size: 8.5px;
+      font-weight: 700;
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 1px 4px;
+      border-radius: 3px;
+      letter-spacing: 0.05em;
+    }
+    .btn-bill-refresh {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: var(--text-muted);
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      flex-shrink: 0;
+    }
+    .btn-bill-refresh:hover {
+      background: rgba(59, 130, 246, 0.25);
+      border-color: rgba(96, 165, 250, 0.5);
+      color: #93c5fd;
+      transform: scale(1.08);
+    }
+    .btn-bill-refresh:active {
+      transform: scale(0.95);
+    }
+    .btn-bill-refresh.spinning svg {
+      animation: spin-bill 0.8s linear infinite;
+    }
+    @keyframes spin-bill {
+      100% { transform: rotate(360deg); }
+    }
+    .card-aws-bill:hover {
+      border-color: rgba(96, 165, 250, 0.35);
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.08);
+    }
+    .hud-chip-bill {
+      border-color: rgba(59, 130, 246, 0.28);
+      background: rgba(59, 130, 246, 0.1);
+      gap: 5px;
+    }
+    .hud-chip-bill:active {
+      border-color: rgba(96, 165, 250, 0.6);
+      background: rgba(59, 130, 246, 0.22);
+    }
+    .hud-bill-val {
+      color: #60a5fa;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+    .hud-bill-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: var(--text-muted);
+      width: 17px;
+      height: 17px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .hud-bill-btn:active {
+      background: rgba(59, 130, 246, 0.35);
+      color: #fff;
+    }
+    .hud-bill-btn.spinning svg {
+      animation: spin-bill 0.8s linear infinite;
+    }
+    .card-aws-mobile {
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.7) 0%, rgba(30, 58, 138, 0.18) 100%);
+      border: 1px solid rgba(59, 130, 246, 0.22);
+    }
+    .card-aws-mobile:active {
+      transform: scale(0.99);
+      border-color: rgba(96, 165, 250, 0.45);
+    }
+    .mob-region-badge {
+      font-size: 9px;
+      font-family: var(--font-mono);
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .mob-bill-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+    .mob-bill-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .mob-bill-value {
+      font-family: var(--font-mono);
+      font-weight: 800;
+      font-size: 13.5px;
+      color: #60a5fa;
+    }
+    .mob-bill-refresh-btn {
+      width: 18px;
+      height: 18px;
+    }
+    .mob-bill-sub {
+      color: #34d399;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .bottom-sheet-handle {
+      display: none;
+    }
     .metric-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -845,14 +992,14 @@ const HTML_CONTENT = `<!DOCTYPE html>
       padding: 20px; z-index: 1600; opacity: 0; pointer-events: none;
       transition: opacity 0.2s ease;
     }
-    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal-overlay.open, .modal-overlay.active { opacity: 1; pointer-events: auto; }
     .modal-box {
       background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 14px; width: 100%; max-width: 540px; padding: 20px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
       transform: scale(0.96); transition: transform 0.2s ease;
     }
-    .modal-overlay.open .modal-box { transform: scale(1); }
+    .modal-overlay.open .modal-box, .modal-overlay.active .modal-box { transform: scale(1); }
     .modal-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px; }
     .modal-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
     .token-textarea {
@@ -939,7 +1086,33 @@ const HTML_CONTENT = `<!DOCTYPE html>
       .tab-pane.active {
         display: flex !important;
       }
-      .modal-box { width: calc(100vw - 24px); }
+      .modal-overlay {
+        align-items: flex-end !important;
+        padding: 0 !important;
+      }
+      .modal-box {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        border-top-left-radius: 18px !important;
+        border-top-right-radius: 18px !important;
+        padding: 14px 18px calc(18px + env(safe-area-inset-bottom)) !important;
+        transform: translateY(100%) !important;
+        transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1) !important;
+      }
+      .modal-overlay.open .modal-box,
+      .modal-overlay.active .modal-box {
+        transform: translateY(0) !important;
+      }
+      .bottom-sheet-handle {
+        display: block !important;
+        width: 36px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 2px;
+        margin: 0 auto 10px;
+      }
       .toast { left: 14px; right: 14px; bottom: max(16px, env(safe-area-inset-bottom)); text-align: center; }
     }
   </style>
@@ -1066,6 +1239,25 @@ const HTML_CONTENT = `<!DOCTYPE html>
         </div>
         <div class="metric-icon">🎯</div>
       </div>
+      <!-- 5. AWS Exact Bill Widget (Web View Only) -->
+      <div class="metric-card card-aws-bill interactive" onclick="toggleAwsBillModal()" title="Click to view detailed AWS cost breakdown">
+        <div class="metric-info">
+          <div class="metric-label-row">
+            <span class="metric-label">AWS Exact Bill</span>
+            <span class="bill-badge-mtd" id="lblAwsPeriod">MTD</span>
+          </div>
+          <div class="metric-cost-row">
+            <span id="valAwsBill" class="metric-value" style="color: #60a5fa;">$--</span>
+            <button id="btnRefreshAwsBill" class="btn-bill-refresh" onclick="refreshAwsBill(event)" title="Fetch latest AWS bill (Manual)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+          </div>
+          <span id="subAwsBill" class="metric-sub">Updated: --</span>
+        </div>
+        <div class="metric-icon" style="color: #ff9900;">☁️</div>
+      </div>
     </div>
 
     <!-- 4. Interactive Navigation Dock (Visible on Mobile ONLY) -->
@@ -1096,6 +1288,15 @@ const HTML_CONTENT = `<!DOCTYPE html>
         <div class="hud-chip"><span class="hud-icon">⚡</span><span id="hudPing">--ms</span></div>
         <div class="hud-chip"><span class="hud-icon">🔑</span><span id="hudToken">--m</span></div>
         <div class="hud-chip interactive" onclick="switchTab('history')"><span class="hud-icon">🎯</span><span id="hudApplied">0 Applied</span></div>
+        <div class="hud-chip interactive hud-chip-bill" onclick="toggleAwsBillModal()" title="AWS Exact Bill (MTD) - Tap for breakdown">
+          <span class="hud-icon">☁️</span>
+          <span id="hudAwsBill" class="hud-bill-val">$--</span>
+          <button id="hudBtnRefreshAwsBill" class="hud-bill-btn" onclick="refreshAwsBill(event)" title="Refresh AWS bill">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Interactive Log Filter Bar -->
@@ -1183,12 +1384,27 @@ const HTML_CONTENT = `<!DOCTYPE html>
         </div>
       </div>
 
-      <!-- AWS EC2 Host Metrics -->
-      <div class="card-server-stats">
-        <div class="server-stat-header">
-          <span>🖥️ AWS Cloud Server (Mumbai ap-south-1)</span>
+      <!-- AWS EC2 Host Metrics & Live Bill (Combined Compact Mobile Widget) -->
+      <div class="card-server-stats card-aws-mobile interactive" onclick="toggleAwsBillModal()" title="Tap to view detailed AWS Cost Breakdown">
+        <div class="server-stat-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>🖥️ AWS Cloud Server</span>
+            <span class="mob-region-badge">ap-south-1</span>
+          </div>
+          <div class="mob-bill-badge" onclick="event.stopPropagation()">
+            <span class="mob-bill-label">MTD:</span>
+            <span id="mobValAwsBill" class="mob-bill-value">$--</span>
+            <button id="mobBtnRefreshAwsBill" class="btn-bill-refresh mob-bill-refresh-btn" onclick="refreshAwsBill(event)" title="Fetch latest AWS bill">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+          </div>
         </div>
-        <div class="server-stat-val" id="mobServer">RAM: -- MB | CPU: --% | Up: --</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+          <div class="server-stat-val" id="mobServer">RAM: -- MB | CPU: --% | Up: --</div>
+          <div id="mobSubAwsBill" class="mob-bill-sub">Details 📊</div>
+        </div>
       </div>
     </div>
 
@@ -1348,6 +1564,49 @@ const HTML_CONTENT = `<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- AWS Cost Breakdown Modal -->
+  <div id="awsBillModal" class="modal-overlay" onclick="if(event.target===this) closeAwsBillModal()">
+    <div class="modal-box" style="max-width: 500px;">
+      <div class="bottom-sheet-handle"></div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div class="modal-title" style="margin-bottom: 0;">☁️ AWS Cost & Usage Breakdown</div>
+        <button class="btn-bill-refresh" onclick="refreshAwsBill(event)" title="Fetch latest AWS bill" style="width: 24px; height: 24px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-desc" id="awsBillModalDesc">
+        Current Month-to-Date (MTD) expenditure queried directly from AWS Cost Explorer.
+      </div>
+      
+      <!-- Summary Card in Modal -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Total Month-to-Date</div>
+          <div id="modalAwsTotal" style="font-size: 26px; font-weight: 800; color: #60a5fa; font-family: var(--font-mono);">$0.00 <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">USD</span></div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: var(--text-muted);" id="modalAwsPeriod">October 2026</div>
+          <div style="font-size: 11px; color: #34d399; font-weight: 600;" id="modalAwsUpdated">Updated: Just now</div>
+        </div>
+      </div>
+
+      <!-- Service Breakdown List -->
+      <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 8px; letter-spacing: 0.05em;">Active Service Charges</div>
+      <div id="awsServicesList" style="max-height: 230px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
+        <!-- Populated dynamically -->
+      </div>
+
+      <div class="modal-actions" style="margin-top: 16px;">
+        <button class="btn btn-outline" onclick="closeAwsBillModal()">Close</button>
+        <button class="btn btn-token" onclick="refreshAwsBill(event)">
+          🔄 Refresh from AWS
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification -->
   <div id="toast" class="toast">Action notification</div>
 
@@ -1396,6 +1655,156 @@ const HTML_CONTENT = `<!DOCTYPE html>
     let previousLogsHtml = '';
     let currentTab = 'terminal';
     let currentLogFilter = 'all';
+    let cachedAwsBillData = null;
+
+    function renderAwsBill(bill) {
+      if (!bill) return;
+      cachedAwsBillData = bill;
+      const valEl = document.getElementById('valAwsBill');
+      const subEl = document.getElementById('subAwsBill');
+      const periodEl = document.getElementById('lblAwsPeriod');
+      const mobValEl = document.getElementById('mobValAwsBill');
+      const mobSubEl = document.getElementById('mobSubAwsBill');
+      const hudValEl = document.getElementById('hudAwsBill');
+      
+      if (valEl) {
+        valEl.innerText = '$' + bill.amount;
+      }
+      if (subEl) {
+        subEl.innerText = 'Updated: ' + (bill.updatedAtFormatted ? bill.updatedAtFormatted.replace(' IST', '') : 'Just now');
+        subEl.title = 'Exact: $' + bill.exactAmount + ' ' + bill.unit + ' • Period: ' + (bill.period || bill.monthName);
+      }
+      if (periodEl && bill.monthName) {
+        periodEl.innerText = bill.monthName.split(' ')[0].toUpperCase();
+      }
+      if (mobValEl) {
+        mobValEl.innerText = '$' + bill.amount;
+      }
+      if (mobSubEl) {
+        mobSubEl.innerText = (bill.period ? bill.period.split(',')[0] : 'Oct MTD') + ' • Details 📊';
+      }
+      if (hudValEl) {
+        hudValEl.innerText = '$' + bill.amount;
+      }
+    }
+
+    async function refreshAwsBill(e) {
+      if (e) e.stopPropagation();
+      const buttons = [
+        document.getElementById('btnRefreshAwsBill'),
+        document.getElementById('mobBtnRefreshAwsBill'),
+        document.getElementById('hudBtnRefreshAwsBill')
+      ].filter(Boolean);
+      buttons.forEach(b => b.classList.add('spinning'));
+
+      const subEl = document.getElementById('subAwsBill');
+      const mobSubEl = document.getElementById('mobSubAwsBill');
+      const hudValEl = document.getElementById('hudAwsBill');
+      if (subEl) subEl.innerText = 'Fetching latest bill...';
+      if (mobSubEl) mobSubEl.innerText = 'Fetching...';
+      if (hudValEl) hudValEl.innerText = '...';
+
+      try {
+        const res = await fetch('/api/aws/bill/refresh', { method: 'POST' });
+        const data = await res.json();
+        if (data.success && data.bill) {
+          renderAwsBill(data.bill);
+          renderAwsModalDetails(data.bill);
+          showToast('✅ AWS Bill updated: $' + data.bill.amount + ' ' + data.bill.unit);
+        } else {
+          showToast('⚠️ ' + (data.error || 'Failed to fetch bill'));
+          if (subEl && cachedAwsBillData) {
+            subEl.innerText = 'Updated: ' + (cachedAwsBillData.updatedAtFormatted || 'Cached');
+          }
+          if (mobSubEl && cachedAwsBillData) {
+            mobSubEl.innerText = (cachedAwsBillData.period ? cachedAwsBillData.period.split(',')[0] : 'Oct MTD') + ' • Details 📊';
+          }
+          if (hudValEl && cachedAwsBillData) {
+            hudValEl.innerText = '$' + cachedAwsBillData.amount;
+          }
+        }
+      } catch (err) {
+        showToast('⚠️ Network error fetching bill');
+        if (subEl && cachedAwsBillData) {
+          subEl.innerText = 'Updated: ' + (cachedAwsBillData.updatedAtFormatted || 'Cached');
+        }
+        if (mobSubEl && cachedAwsBillData) {
+          mobSubEl.innerText = (cachedAwsBillData.period ? cachedAwsBillData.period.split(',')[0] : 'Oct MTD') + ' • Details 📊';
+        }
+        if (hudValEl && cachedAwsBillData) {
+          hudValEl.innerText = '$' + cachedAwsBillData.amount;
+        }
+      } finally {
+        buttons.forEach(b => b.classList.remove('spinning'));
+      }
+    }
+
+    function toggleAwsBillModal() {
+      const modal = document.getElementById('awsBillModal');
+      if (!modal) return;
+      if (modal.classList.contains('open') || modal.classList.contains('active')) {
+        closeAwsBillModal();
+      } else {
+        modal.classList.add('open');
+        modal.classList.add('active');
+        if (cachedAwsBillData) {
+          renderAwsModalDetails(cachedAwsBillData);
+        } else {
+          fetch('/api/aws/bill').then(r => r.json()).then(data => {
+            if (data.bill) {
+              cachedAwsBillData = data.bill;
+              renderAwsBill(data.bill);
+              renderAwsModalDetails(data.bill);
+            }
+          }).catch(() => {});
+        }
+      }
+    }
+
+    function closeAwsBillModal() {
+      const modal = document.getElementById('awsBillModal');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.classList.remove('active');
+      }
+    }
+
+    function renderAwsModalDetails(bill) {
+      if (!bill) return;
+      const totalEl = document.getElementById('modalAwsTotal');
+      const periodEl = document.getElementById('modalAwsPeriod');
+      const updatedEl = document.getElementById('modalAwsUpdated');
+      const listEl = document.getElementById('awsServicesList');
+
+      if (totalEl) totalEl.innerHTML = '$' + bill.amount + ' <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">' + bill.unit + '</span>';
+      if (periodEl) periodEl.innerText = bill.period || bill.monthName;
+      if (updatedEl) updatedEl.innerText = 'Updated: ' + (bill.updatedAtFormatted || 'Just now');
+
+      if (listEl && Array.isArray(bill.services)) {
+        if (bill.services.length === 0) {
+          listEl.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; padding: 10px 0;">No active service charges recorded.</div>';
+          return;
+        }
+        const maxVal = Math.max(...bill.services.map(s => s.amount), 0.01);
+        listEl.innerHTML = bill.services.map(s => {
+          const pct = Math.round((s.amount / maxVal) * 100);
+          const isEc2 = s.service.toLowerCase().includes('elastic compute cloud') || s.service.toLowerCase().includes('ec2');
+          const icon = isEc2 ? '🖥️' : (s.service.toLowerCase().includes('vpc') ? '🌐' : (s.service.toLowerCase().includes('relational') ? '🗄️' : '📦'));
+          return '<div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 7px 10px; display: flex; flex-direction: column; gap: 4px;">' +
+            '<div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">' +
+              '<div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
+                '<span>' + icon + '</span>' +
+                '<span style="font-weight: 600; color: #f3f4f6;">' + s.service + '</span>' +
+              '</div>' +
+              '<div style="font-family: var(--font-mono); font-weight: 700; color: #fff;">$' + s.amount.toFixed(2) + '</div>' +
+            '</div>' +
+            '<div style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">' +
+              '<div style="width: ' + pct + '%; height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); border-radius: 2px;"></div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+    }
 
     function setElText(id, text) {
       const el = document.getElementById(id);
@@ -1772,6 +2181,11 @@ const HTML_CONTENT = `<!DOCTYPE html>
           setElText('mobLastScan', 'Last: ' + lastTimeStr);
         }
 
+        // AWS Bill (Rendered from server cache; NO auto-refresh to prevent API costs)
+        if (data.awsBill) {
+          renderAwsBill(data.awsBill);
+        }
+
         // Logs (Smart Auto-Scroll with Category Filtering)
         const term = document.getElementById('terminalLogs');
         if (term && data.logs && data.logs.length) {
@@ -1956,13 +2370,13 @@ const HTML_CONTENT = `<!DOCTYPE html>
     async function togglePauseResume() {
       const action = (currentStatus === 'online') ? 'pause' : 'resume';
       try {
-        const res = await fetch('/api/action/' + action, { method: 'POST' });
+        const res = await fetch('/api/engine/' + action, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           showToast((action === 'pause') ? '⏸️ Cloud Engine Paused' : '▶️ Cloud Engine Resumed');
           fetchData();
         } else {
-          showToast('❌ Failed: ' + data.message);
+          showToast('❌ Failed: ' + (data.message || 'Could not ' + action));
         }
       } catch (e) {
         showToast('❌ Error executing ' + action);
@@ -1972,13 +2386,13 @@ const HTML_CONTENT = `<!DOCTYPE html>
     async function restartEngine() {
       if (!confirm('Are you sure you want to restart the background runner?')) return;
       try {
-        const res = await fetch('/api/action/restart', { method: 'POST' });
+        const res = await fetch('/api/engine/restart', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           showToast('🔄 Engine restarted successfully');
           fetchData();
         } else {
-          showToast('❌ Failed: ' + data.message);
+          showToast('❌ Failed: ' + (data.message || 'Could not restart'));
         }
       } catch (e) {
         showToast('❌ Error restarting engine');
@@ -2092,12 +2506,33 @@ const server = http.createServer(async (req, res) => {
     const runtimeConfig = getRuntimeConfig();
     const appliedHistory = getAppliedDemandsList();
     const latency = await checkPortalLatency();
+    const awsBill = getCachedAwsBill();
 
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*'
     });
-    return res.end(JSON.stringify({ pm2, token, hasRefreshToken: hasRefresh, stats, logs, runtimeConfig, appliedHistory, latency }));
+    return res.end(JSON.stringify({ pm2, token, hasRefreshToken: hasRefresh, stats, logs, runtimeConfig, appliedHistory, latency, awsBill }));
+  }
+
+  // GET /api/aws/bill (read from cache only, zero API charge)
+  if (pathname === '/api/aws/bill' && method === 'GET') {
+    const bill = getCachedAwsBill();
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    return res.end(JSON.stringify({ success: true, bill }));
+  }
+
+  // POST /api/aws/bill/refresh (manual refresh button clicked)
+  if (pathname === '/api/aws/bill/refresh' && method === 'POST') {
+    try {
+      const bill = await fetchLatestAwsBill();
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: true, bill }));
+    } catch (e) {
+      console.error('Failed to fetch AWS bill:', e);
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: false, error: e.message || 'Failed to fetch latest AWS bill' }));
+    }
   }
 
   // POST /api/config/interval
@@ -2237,29 +2672,29 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // POST /api/engine/pause
-  if (pathname === '/api/engine/pause' && method === 'POST') {
-    exec('pm2 stop prod-automator', (err) => {
+  // POST /api/engine/pause or /api/action/pause
+  if ((pathname === '/api/engine/pause' || pathname === '/api/action/pause') && method === 'POST') {
+    exec('pm2 stop prod-automator', (err, stdout, stderr) => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      return res.end(JSON.stringify({ success: !err, status: 'stopped' }));
+      return res.end(JSON.stringify({ success: !err, status: 'stopped', message: err ? (stderr || err.message) : 'Stopped' }));
     });
     return;
   }
 
-  // POST /api/engine/resume
-  if (pathname === '/api/engine/resume' && method === 'POST') {
-    exec('pm2 start prod-automator', (err) => {
+  // POST /api/engine/resume or /api/action/resume
+  if ((pathname === '/api/engine/resume' || pathname === '/api/action/resume') && method === 'POST') {
+    exec('pm2 start prod-automator', (err, stdout, stderr) => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      return res.end(JSON.stringify({ success: !err, status: 'online' }));
+      return res.end(JSON.stringify({ success: !err, status: 'online', message: err ? (stderr || err.message) : 'Started' }));
     });
     return;
   }
 
-  // POST /api/engine/restart
-  if (pathname === '/api/engine/restart' && method === 'POST') {
-    exec('pm2 restart prod-automator', (err) => {
+  // POST /api/engine/restart or /api/action/restart
+  if ((pathname === '/api/engine/restart' || pathname === '/api/action/restart') && method === 'POST') {
+    exec('pm2 restart prod-automator', (err, stdout, stderr) => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      return res.end(JSON.stringify({ success: !err, status: 'restarted' }));
+      return res.end(JSON.stringify({ success: !err, status: 'restarted', message: err ? (stderr || err.message) : 'Restarted' }));
     });
     return;
   }
